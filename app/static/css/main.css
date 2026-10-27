@@ -1,0 +1,4 @@
+body { margin: 0; font-family: system-ui, sans-serif; color: #1c2430; }
+.topbar { padding: 12px 24px; background: #0b5c8a; }
+.topbar .brand { color: #fff; text-decoration: none; font-weight: 600; }
+.container { max-width: 960px; margin: 24px auto; padding: 0 16px; }
