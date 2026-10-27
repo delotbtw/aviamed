@@ -1,0 +1,44 @@
+{% from "macros.html" import field, password_field, select, form_errors %}
+<div id="athlete-form">
+  {% if success %}<div class="alert alert-success" role="status">Создан новый спортсмен. Сообщите ему пароль лично.</div>{% endif %}
+  {{ form_errors(errors) }}
+  <form method="post" action="/cabinet/athletes/new" hx-post="/cabinet/athletes/new" hx-target="#athlete-form" hx-swap="outerHTML"
+        x-data="{ busy: false }" @htmx:before-request="busy = true" @htmx:after-request="busy = false">
+    <fieldset>
+      <legend>Учётная запись</legend>
+      {{ field("email", "Email", values, errors, type="email", required=true, autocomplete="off") }}
+      {{ password_field("password", "Начальный пароль", errors, hint="От 10 до 128 символов, буква и цифра") }}
+    </fieldset>
+    <fieldset>
+      <legend>Личные данные</legend>
+      <div class="grid">
+        {{ field("last_name", "Фамилия", values, errors, required=true) }}
+        {{ field("first_name", "Имя", values, errors, required=true) }}
+        {{ field("middle_name", "Отчество", values, errors) }}
+        {{ field("phone", "Телефон", values, errors, type="tel", autocomplete="off") }}
+        {{ field("birth_date", "Дата рождения", values, errors, type="date", required=true, max_value=today) }}
+        {{ select("sex", "Пол", [("male", "Мужской"), ("female", "Женский")], values, errors, required=true, empty="Выберите") }}
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Спорт</legend>
+      <div class="grid">
+        {{ select("sport_id", "Вид спорта", sports, values, errors) }}
+        {{ select("coach_id", "Тренер", coaches, values, errors) }}
+        {{ field("faculty", "Факультет", values, errors) }}
+        {{ field("study_group", "Учебная группа", values, errors) }}
+        {{ select("training_stage", "Этап подготовки", [("mass", "Массовый спорт"), ("training", "Тренировочный этап"), ("improvement", "Совершенствование мастерства"), ("higher_mastery", "Высшее мастерство")], values, errors) }}
+        {{ field("registry_number", "Номер в реестре", values, errors) }}
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Согласие на обработку данных (бумажное)</legend>
+      <div class="grid">
+        {{ field("consent_paper_number", "Номер согласия", values, errors, required=true) }}
+        {{ field("consent_signed_at", "Дата подписания", values, errors, type="date", required=true, max_value=today) }}
+      </div>
+    </fieldset>
+    <button type="submit" class="btn btn-primary" :disabled="busy">Зарегистрировать</button>
+    <a class="btn" href="/cabinet">Назад</a>
+  </form>
+</div>

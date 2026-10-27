@@ -5,11 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Med Center{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', path='css/main.css') }}">
+  <script src="{{ url_for('static', path='js/htmx-2.0.4.min.js') }}"></script>
+  <script defer src="{{ url_for('static', path='js/alpine-3.14.9.min.js') }}"></script>
+  <script>
+    // Let HTMX show 4xx responses (validation, conflict, rate limit) instead of discarding them.
+    document.addEventListener("htmx:beforeSwap", function (e) {
+      var status = e.detail.xhr.status;
+      if (status >= 400 && status < 500 && status !== 401) {
+        e.detail.shouldSwap = true;
+        e.detail.isError = false;
+      }
+    });
+  </script>
 </head>
 <body>
   <header class="topbar">
-    <a href="/" class="brand">Med Center</a>
-    {% block nav %}{% endblock %}
+    <a href="{{ '/cabinet' if user else '/' }}" class="brand">Med Center</a>
+    {% block nav %}
+      {% if user %}
+        <nav class="topbar-nav" aria-label="Основное меню">
+          <a href="/cabinet">Кабинет</a>
+          <span class="topbar-user">{{ user.last_name }} {{ user.first_name }}</span>
+          <form method="post" action="/logout" class="inline-form">
+            <button type="submit" class="btn btn-link">Выйти</button>
+          </form>
+        </nav>
+      {% endif %}
+    {% endblock %}
   </header>
   <main class="container">
     {% block content %}{% endblock %}

@@ -1,0 +1,47 @@
+{# Form field helpers. `values` = entered values (never passwords), `errors` = field -> message. #}
+{% macro field(name, label, values, errors, type="text", required=false, autocomplete=none, hint=none, max_value=none) %}
+  <div class="field{% if errors.get(name) %} has-error{% endif %}">
+    <label for="f-{{ name }}">{{ label }}{% if required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>
+    <input id="f-{{ name }}" name="{{ name }}" type="{{ type }}"
+           {% if type != "password" %}value="{{ values.get(name, '') }}"{% endif %}
+           {% if required %}required{% endif %}
+           {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+           {% if errors.get(name) %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}
+           {% if max_value %}max="{{ max_value }}"{% endif %}>
+    {% if hint %}<small class="hint">{{ hint }}</small>{% endif %}
+    {% if errors.get(name) %}<small class="error" id="e-{{ name }}">{{ errors[name] }}</small>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro password_field(name, label, errors, autocomplete="new-password", hint=none) %}
+  <div class="field{% if errors.get(name) %} has-error{% endif %}" x-data="{ shown: false }">
+    <label for="f-{{ name }}">{{ label }} <span class="req" aria-hidden="true">*</span></label>
+    <div class="input-row">
+      <input id="f-{{ name }}" name="{{ name }}" :type="shown ? 'text' : 'password'" type="password" required
+             autocomplete="{{ autocomplete }}"
+             {% if errors.get(name) %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+      <button type="button" class="btn btn-small" @click="shown = !shown" :aria-pressed="shown"
+              x-text="shown ? 'Скрыть' : 'Показать'">Показать</button>
+    </div>
+    {% if hint %}<small class="hint">{{ hint }}</small>{% endif %}
+    {% if errors.get(name) %}<small class="error" id="e-{{ name }}">{{ errors[name] }}</small>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro select(name, label, options, values, errors, required=false, empty="-") %}
+  <div class="field{% if errors.get(name) %} has-error{% endif %}">
+    <label for="f-{{ name }}">{{ label }}{% if required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>
+    <select id="f-{{ name }}" name="{{ name }}" {% if required %}required{% endif %}
+            {% if errors.get(name) %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+      {% if empty %}<option value="">{{ empty }}</option>{% endif %}
+      {% for value, text in options %}
+        <option value="{{ value }}" {% if values.get(name) == value|string %}selected{% endif %}>{{ text }}</option>
+      {% endfor %}
+    </select>
+    {% if errors.get(name) %}<small class="error" id="e-{{ name }}">{{ errors[name] }}</small>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro form_errors(errors) %}
+  {% if errors.get("_general") %}<div class="alert alert-error" role="alert">{{ errors["_general"] }}</div>{% endif %}
+{% endmacro %}

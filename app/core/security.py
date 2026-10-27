@@ -1,47 +1,46 @@
-"""Password hashing and JWT helpers. Token storage/revocation lives in auth service."""
+"""Password hashing and refresh-token primitives. Access (JWT) tokens live in core/access_tokens.py."""
 
+import asyncio
 import hashlib
 import secrets
-from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Protocol
 
-import jwt
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
-
-from app.core.config import get_settings
-
-_hasher = PasswordHasher()
+from argon2 import PasswordHasher as _Argon2
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
 
-def hash_password(password: str) -> str:
-    return _hasher.hash(password)
+class PasswordHasher(Protocol):
+    """Abstraction injected into services. Argon2 is CPU-bound: implementations must not block the event loop."""
+
+    async def hash(self, password: str) -> str: ...
+
+    async def verify(self, password: str, password_hash: str) -> bool: ...
+
+    async def verify_dummy(self, password: str) -> None:
+        """Spend the time of a real verification (hides whether an account exists)."""
 
 
-def verify_password(password: str, password_hash: str) -> bool:
-    try:
-        return _hasher.verify(password_hash, password)
-    except VerifyMismatchError:
-        return False
+class Argon2PasswordHasher:
+    """Library-default argon2 parameters; the blocking work runs in a thread."""
 
+    def __init__(self) -> None:
+        self._argon2 = _Argon2()
+        self._dummy_hash = self._argon2.hash("dummy-password-for-timing")
 
-def create_access_token(user_id: int, role: str) -> str:
-    s = get_settings()
-    now = datetime.now(UTC)
-    payload = {
-        "sub": str(user_id),
-        "role": role,
-        "type": "access",
-        "iat": now,
-        "exp": now + timedelta(minutes=s.access_token_ttl_min),
-    }
-    return jwt.encode(payload, s.secret_key, algorithm=s.jwt_algorithm)
+    def _verify(self, password: str, password_hash: str) -> bool:
+        try:
+            return self._argon2.verify(password_hash, password)
+        except (VerifyMismatchError, VerificationError, InvalidHashError):
+            return False
 
+    async def hash(self, password: str) -> str:
+        return await asyncio.to_thread(self._argon2.hash, password)
 
-def decode_token(token: str) -> dict[str, Any]:
-    """Raises jwt.PyJWTError on invalid or expired token."""
-    s = get_settings()
-    return jwt.decode(token, s.secret_key, algorithms=[s.jwt_algorithm])
+    async def verify(self, password: str, password_hash: str) -> bool:
+        return await asyncio.to_thread(self._verify, password, password_hash)
+
+    async def verify_dummy(self, password: str) -> None:
+        await asyncio.to_thread(self._verify, password, self._dummy_hash)
 
 
 def new_refresh_token() -> tuple[str, str]:

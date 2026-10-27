@@ -1,0 +1,55 @@
+{% from "macros.html" import field, password_field, select, form_errors %}
+<div id="user-form">
+  {% if success %}<div class="alert alert-success" role="status">Создан новый пользователь. Сообщите ему пароль лично.</div>{% endif %}
+  {{ form_errors(errors) }}
+  <form method="post" action="/cabinet/users/new" hx-post="/cabinet/users/new" hx-target="#user-form" hx-swap="outerHTML"
+        x-data="{ busy: false, role: '{{ values.get('role', 'doctor') }}' }"
+        @htmx:before-request="busy = true" @htmx:after-request="busy = false">
+    <fieldset>
+      <legend>Учётная запись</legend>
+      <div class="field{% if errors.get('role') %} has-error{% endif %}">
+        <label for="f-role">Роль <span class="req" aria-hidden="true">*</span></label>
+        <select id="f-role" name="role" x-model="role" required>
+          {% for r in staff_roles %}
+            <option value="{{ r.value }}" {% if values.get('role', 'doctor') == r.value %}selected{% endif %}>{{ role_labels[r] }}</option>
+          {% endfor %}
+        </select>
+        {% if errors.get('role') %}<small class="error">{{ errors['role'] }}</small>{% endif %}
+      </div>
+      {{ field("email", "Email", values, errors, type="email", required=true, autocomplete="off") }}
+      {{ password_field("password", "Начальный пароль", errors, hint="От 10 до 128 символов, буква и цифра") }}
+    </fieldset>
+    <fieldset>
+      <legend>Личные данные</legend>
+      <div class="grid">
+        {{ field("last_name", "Фамилия", values, errors, required=true) }}
+        {{ field("first_name", "Имя", values, errors, required=true) }}
+        {{ field("middle_name", "Отчество", values, errors) }}
+        {{ field("phone", "Телефон", values, errors, type="tel", autocomplete="off") }}
+      </div>
+    </fieldset>
+    {# Fields of a role that is not selected are disabled, so the browser does not submit them. #}
+    <fieldset x-show="role === 'doctor'" :disabled="role !== 'doctor'">
+      <legend>Профиль врача</legend>
+      <div class="grid">
+        {{ select("specialty_id", "Специальность", specialties, values, errors, empty="Выберите") }}
+        {{ field("cabinet", "Кабинет", values, errors) }}
+      </div>
+      <label class="check"><input type="checkbox" name="can_issue_conclusion" value="true" {% if values.get('can_issue_conclusion') %}checked{% endif %}>
+        Может выдавать заключение о допуске</label>
+    </fieldset>
+    <fieldset x-show="role === 'registrar' || role === 'admin'" :disabled="role !== 'registrar' && role !== 'admin'">
+      <legend>Профиль сотрудника</legend>
+      <div class="grid">
+        {{ field("position", "Должность", values, errors) }}
+        {{ field("workplace", "Место работы", values, errors) }}
+      </div>
+    </fieldset>
+    <fieldset x-show="role === 'coach'" :disabled="role !== 'coach'">
+      <legend>Профиль тренера</legend>
+      {{ select("sport_id", "Вид спорта", sports, values, errors) }}
+    </fieldset>
+    <button type="submit" class="btn btn-primary" :disabled="busy">Создать</button>
+    <a class="btn" href="/cabinet">Назад</a>
+  </form>
+</div>

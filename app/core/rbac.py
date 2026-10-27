@@ -29,6 +29,7 @@ class Scope(StrEnum):
 
 class Action(StrEnum):
     USER_CREATE = "user_create"
+    USER_DEACTIVATE = "user_deactivate"
     ATHLETE_REGISTER = "athlete_register"
     PROFILE_EDIT = "profile_edit"
     REFERENCE_READ = "reference_read"
@@ -54,6 +55,7 @@ F, OWN, R = Scope.FULL, Scope.OWN, Scope.READ
 # action -> role -> scope. A missing role means "—" (no access).
 PERMISSIONS: dict[Action, dict[Role, Scope]] = {
     Action.USER_CREATE: {Role.ADMIN: F},
+    Action.USER_DEACTIVATE: {Role.ADMIN: F},
     Action.ATHLETE_REGISTER: {Role.ADMIN: F, Role.REGISTRAR: F},
     Action.PROFILE_EDIT: {Role.ADMIN: F, Role.REGISTRAR: F, Role.DOCTOR: F, Role.ATHLETE: OWN, Role.COACH: F},
     Action.REFERENCE_READ: {Role.ADMIN: F, Role.REGISTRAR: R, Role.DOCTOR: R, Role.ATHLETE: R, Role.COACH: R},

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Регистрация спортсмена - Med Center{% endblock %}
+{% block content %}
+  <section class="card">
+    <h1>Регистрация спортсмена</h1>
+    <p class="muted">Начальный пароль задаёт регистратура и сообщает спортсмену лично.</p>
+    {% include "partials/athlete_form.html" %}
+  </section>
+{% endblock %}

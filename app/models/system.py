@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import AuthorshipMixin, Base, IdMixin, TimestampMixin
@@ -10,6 +10,16 @@ class Consent(IdMixin, TimestampMixin, AuthorshipMixin, Base):
     """Paper consent registry: only number and dates, no scans (docs/08)."""
 
     __tablename__ = "consents"
+    __table_args__ = (
+        # One active paper consent number per consent type (revoked consents free the number).
+        Index(
+            "uq_consents_type_paper_number_active",
+            "consent_type",
+            "paper_number",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+    )
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     consent_type: Mapped[str] = mapped_column(String(64))

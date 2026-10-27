@@ -1,15 +1,14 @@
 """SQLAdmin: admin only. Bypasses the service layer, so working tables are read-only."""
 
-import jwt
 from fastapi import FastAPI
 from sqladmin import Admin, ModelView
 from sqladmin.authentication import AuthenticationBackend
+from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.requests import Request
 
-from app.core.config import get_settings
-from app.core.db import engine
+from app.core.access_tokens import AccessTokenService
+from app.core.exceptions import AuthenticationFailed
 from app.core.rbac import Role
-from app.core.security import decode_token
 from app.models import (
     AuditLog,
     Conclusion,
@@ -24,6 +23,10 @@ from app.models import (
 
 
 class AdminAuth(AuthenticationBackend):
+    def __init__(self, secret_key: str, access_tokens: AccessTokenService) -> None:
+        super().__init__(secret_key=secret_key)
+        self.access_tokens = access_tokens
+
     async def login(self, request: Request) -> bool:
         # TODO: login form -> verify credentials -> put access token into the session/cookie.
         return False
@@ -37,8 +40,8 @@ class AdminAuth(AuthenticationBackend):
         if not token:
             return False
         try:
-            return decode_token(token).get("role") == Role.ADMIN
-        except jwt.PyJWTError:
+            return self.access_tokens.parse(token).role == Role.ADMIN
+        except AuthenticationFailed:
             return False
 
 
@@ -87,12 +90,12 @@ class AuditLogAdmin(_ReadOnly, ModelView, model=AuditLog):
     column_list = [AuditLog.id, AuditLog.user_id, AuditLog.action, AuditLog.created_at]
 
 
-def setup_admin(app: FastAPI) -> Admin:
+def setup_admin(app: FastAPI, engine: AsyncEngine, secret_key: str, access_tokens: AccessTokenService) -> Admin:
     admin = Admin(
         app,
         engine,
         base_url="/admin",
-        authentication_backend=AdminAuth(secret_key=get_settings().secret_key),
+        authentication_backend=AdminAuth(secret_key, access_tokens),
     )
     for view in (
         UserAdmin,

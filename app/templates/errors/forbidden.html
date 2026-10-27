@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Нет доступа - Med Center{% endblock %}
+{% block content %}
+  <section class="card card-narrow">
+    <h1>Нет доступа</h1>
+    <p>У роли «{{ role_labels[user.role] }}» нет доступа к этой странице.</p>
+    <p><a href="/cabinet">Вернуться в кабинет</a></p>
+  </section>
+{% endblock %}

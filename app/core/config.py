@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     login_max_attempts: int = 5
     login_window_s: int = 900
+    login_max_attempts_ip: int = 20
 
     # Medical organization details for the conclusion PDF header (docs/04 section 3).
     org_name: str = ""
