@@ -3,38 +3,53 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Med Center{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', path='css/main.css') }}">
-  <script src="{{ url_for('static', path='js/htmx-2.0.4.min.js') }}"></script>
+  <title>{% block title %}АвиаМед{% endblock %}</title>
+  <meta name="description" content="{% block description %}АвиаМед: личный кабинет медицинского центра МАИ для спортсменов, тренеров и сотрудников.{% endblock %}">
+  <link rel="preload" href="{{ url_for('static', path='fonts/onest-var.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ url_for('static', path='fonts/source-serif-4-var.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/base.css') }}?v={{ asset_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/tokens.css') }}?v={{ asset_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/main.css') }}?v={{ asset_version }}">
+  <script defer src="{{ url_for('static', path='js/htmx-2.0.4.min.js') }}"></script>
+  <script defer src="{{ url_for('static', path='js/app.js') }}?v={{ asset_version }}"></script>
   <script defer src="{{ url_for('static', path='js/alpine-3.14.9.min.js') }}"></script>
-  <script>
-    // Let HTMX show 4xx responses (validation, conflict, rate limit) instead of discarding them.
-    document.addEventListener("htmx:beforeSwap", function (e) {
-      var status = e.detail.xhr.status;
-      if (status >= 400 && status < 500 && status !== 401) {
-        e.detail.shouldSwap = true;
-        e.detail.isError = false;
-      }
-    });
-  </script>
 </head>
-<body>
-  <header class="topbar">
-    <a href="{{ '/cabinet' if user else '/' }}" class="brand">Med Center</a>
-    {% block nav %}
-      {% if user %}
-        <nav class="topbar-nav" aria-label="Основное меню">
-          <a href="/cabinet">Кабинет</a>
-          <span class="topbar-user">{{ user.last_name }} {{ user.first_name }}</span>
-          <form method="post" action="/logout" class="inline-form">
-            <button type="submit" class="btn btn-link">Выйти</button>
-          </form>
-        </nav>
-      {% endif %}
-    {% endblock %}
+<body x-data="{ busy: false }" @htmx:before-request="busy = true" @htmx:after-request="busy = false">
+  <a class="skip-link" href="#main">К содержимому</a>
+  <header class="masthead">
+    <div class="container masthead__bar"{% if user %} x-data="{ open: false }" :class="{ 'has-menu': true }" @keydown.escape="open = false"{% endif %}>
+      <a class="wordmark" href="{{ '/cabinet' if user else '/' }}" aria-label="АвиаМед, {{ 'кабинет' if user else 'главная страница' }}">АвиаМед</a>
+      {% block nav %}
+        {% if user %}
+          <button type="button" class="btn btn--menu" x-ref="menu" aria-controls="site-nav" :aria-expanded="open" @click="open = !open">Меню</button>
+          <nav id="site-nav" class="site-nav" :class="{ 'is-open': open }" aria-label="Основное меню">
+            <ul class="site-nav__links" @click="open = false">
+              {% for link in nav_links(user) %}
+                <li><a href="{{ link.href }}"{% if request.url.path == link.href %} aria-current="page"{% endif %}>{{ link.label }}</a></li>
+              {% endfor %}
+            </ul>
+            <div class="site-nav__user">
+              <span class="site-nav__name">{{ user.last_name }} {{ user.first_name }}</span>
+              {% if role_labels %}<span class="site-nav__role">{{ role_labels[user.role] }}</span>{% endif %}
+              <form method="post" action="/logout">
+                <button type="submit" class="btn btn--quiet">Выйти</button>
+              </form>
+            </div>
+          </nav>
+        {% elif request.url.path != "/login" %}
+          <a class="btn" href="/login">Войти</a>
+        {% endif %}
+      {% endblock %}
+    </div>
   </header>
-  <main class="container">
+  <main id="main" class="{% block main_class %}container page{% endblock %}">
     {% block content %}{% endblock %}
   </main>
+  <footer class="footer">
+    <div class="container footer__inner">
+      <p class="footer__name">АвиаМед</p>
+      <p class="footer__note">Медицинский центр МАИ</p>
+    </div>
+  </footer>
 </body>
 </html>

@@ -1,9 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Регистрация спортсмена - Med Center{% endblock %}
+{% from "macros.html" import page_head %}
+{% block title %}Регистрация спортсмена, АвиаМед{% endblock %}
 {% block content %}
-  <section class="card">
-    <h1>Регистрация спортсмена</h1>
-    <p class="muted">Начальный пароль задаёт регистратура и сообщает спортсмену лично.</p>
-    {% include "partials/athlete_form.html" %}
-  </section>
+  <div class="workspace">
+    {{ page_head("Регистрация спортсмена", "Начальный пароль задаёт регистратура и сообщает спортсмену лично.") }}
+    <section class="sheet" aria-label="Форма регистрации спортсмена">
+      {% include "partials/athlete_form.html" %}
+    </section>
+  </div>
 {% endblock %}

@@ -1,7 +1,7 @@
 [project]
 name = "med-center"
 version = "0.1.0"
-description = "Add your description here"
+description = "АвиаМед: система допуска спортсменов медицинского центра МАИ"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

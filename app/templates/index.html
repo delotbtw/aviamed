@@ -1,6 +1,60 @@
 {% extends "base.html" %}
-{% block title %}Главная - Med Center{% endblock %}
+{% block title %}АвиаМед, медицинский допуск спортсменов МАИ{% endblock %}
+{% block description %}Медицинский центр МАИ: запись на осмотр, результаты и заключение о допуске в PDF в личном кабинете спортсмена.{% endblock %}
+{% block main_class %}{% endblock %}
 {% block content %}
-  <h1>Med Center</h1>
-  <p>Система допуска спортсменов. Страницы будут добавлены по ролям.</p>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="container hero__grid">
+      <div class="hero__text">
+        <h1 id="hero-title">Осмотр и допуск спортсменов МАИ</h1>
+        <p class="lead">Прототип кабинета: пока работают вход и регистрация спортсменов.</p>
+        {% if user %}
+          <a class="btn btn--primary btn--lg" href="/cabinet">Открыть кабинет</a>
+        {% else %}
+          <a class="btn btn--primary btn--lg" href="/login">Войти</a>
+        {% endif %}
+      </div>
+      <div class="sheet">
+        <table class="ledger ledger--steps" role="table">
+          <caption>Путь спортсмена к допуску (шаг 3 и далее пока в разработке)</caption>
+          <thead role="rowgroup">
+            <tr role="row"><th role="columnheader" scope="col" class="num">Шаг</th><th role="columnheader" scope="col">Кто</th><th role="columnheader" scope="col">Что происходит</th></tr>
+          </thead>
+          <tbody role="rowgroup">
+            <tr role="row"><td role="cell" class="num">1</td><th role="rowheader" scope="row">Регистратура</th><td role="cell">Заводит аккаунт при личном визите</td></tr>
+            <tr class="ledger__entry" role="row"><td role="cell" class="num">2</td><th role="rowheader" scope="row">Спортсмен</th><td role="cell">Вход в систему по email и паролю</td></tr>
+            <tr role="row"><td role="cell" class="num">3</td><th role="rowheader" scope="row">Спортсмен</th><td role="cell">Выбирает свободные слоты на осмотр</td></tr>
+            <tr role="row"><td role="cell" class="num">4</td><th role="rowheader" scope="row">Врачи</th><td role="cell">Проводят осмотры и вносят результаты</td></tr>
+            <tr role="row"><td role="cell" class="num">5</td><th role="rowheader" scope="row">Врач</th><td role="cell">Врач по спортивной медицине выдаёт заключение, PDF скачивается в кабинете</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="roles-title">
+    <div class="container split">
+      <h2 id="roles-title">Кто работает в системе</h2>
+      <div class="sheet">
+        <table class="ledger ledger--roles" role="table">
+          <thead role="rowgroup">
+            <tr role="row"><th role="columnheader" scope="col">Роль</th><th role="columnheader" scope="col">Что делает</th></tr>
+          </thead>
+          <tbody role="rowgroup">
+            <tr role="row"><th role="rowheader" scope="row">Спортсмен</th><td role="cell">Записывается на осмотры, видит статус допуска, скачивает заключение</td></tr>
+            <tr role="row"><th role="rowheader" scope="row">Тренер</th><td role="cell">Видит статус допуска своих подопечных, без диагнозов</td></tr>
+            <tr role="row"><th role="rowheader" scope="row">Регистратура</th><td role="cell">Регистрирует спортсменов, записывает их, отмечает приход</td></tr>
+            <tr role="row"><th role="rowheader" scope="row">Врач</th><td role="cell">Проводит осмотры, вносит результаты; заключение выдаёт врач по спортивной медицине</td></tr>
+            <tr role="row"><th role="rowheader" scope="row">Администратор</th><td role="cell">Управляет пользователями, справочниками и расписанием</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="prototype-title">
+    <div class="container">
+      <h2 id="prototype-title">Это прототип: он работает на условных спортсменах и тестовых данных.</h2>
+    </div>
+  </section>
 {% endblock %}

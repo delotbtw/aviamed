@@ -1,11 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Кабинет - Med Center{% endblock %}
+{% from "macros.html" import page_head %}
+{% block title %}Кабинет, АвиаМед{% endblock %}
 {% block content %}
-  <h1>Здравствуйте, {{ user.last_name }} {{ user.first_name }}{% if user.middle_name %} {{ user.middle_name }}{% endif %}</h1>
-  <p class="muted">Роль: {{ role_labels[user.role] }}</p>
-  <ul class="tiles">
-    {% if can_create_user %}<li><a class="tile" href="/cabinet/users/new">Создать пользователя</a></li>{% endif %}
-    {% if can_register_athlete %}<li><a class="tile" href="/cabinet/athletes/new">Зарегистрировать спортсмена</a></li>{% endif %}
-    <li><a class="tile" href="/cabinet/password">Сменить пароль</a></li>
-  </ul>
+  <div class="workspace">
+    {{ page_head("Здравствуйте, " ~ user.last_name ~ " " ~ user.first_name ~ ((" " ~ user.middle_name) if user.middle_name else ""), "Роль: " ~ role_labels[user.role]) }}
+    <div class="sheet sheet--flush">
+      <ul class="index">
+        {% for link in nav_links(user) %}
+          <li><a class="index__link" href="{{ link.href }}"><span class="index__title">{{ link.label }}</span><span class="index__note">{{ link.note }}</span></a></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
 {% endblock %}

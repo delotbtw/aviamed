@@ -1,0 +1,38 @@
+/* Almanac tokens: the theme's palette and rules, the shared scale. Every colour and face in the project is declared here. */
+
+/* Hanken Grotesk and Newsreader have no Cyrillic, so the Russian UI takes Onest (grotesk) and Source Serif 4.
+   Files are subset to Latin and Cyrillic, licence SIL OFL 1.1 (see ../fonts/OFL-*.txt). */
+@font-face { font-family: "Onest"; src: url("../fonts/onest-var.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Serif 4"; src: url("../fonts/source-serif-4-var.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("../fonts/ibm-plex-mono-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("../fonts/ibm-plex-mono-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+
+:root {
+  color-scheme: light;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px;
+  --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.25rem; --text-xl: 1.5625rem; --text-2xl: 1.953rem;
+  /* Cyrillic sets wider than Latin: the display steps are a notch below the generic scale. */
+  --text-display-s: clamp(2rem, 3vw + 0.5rem, 3.25rem); --text-display: clamp(2.25rem, 3vw + 1rem, 4rem);
+  --text-section: clamp(1.75rem, 2vw + 1rem, 2.75rem); --text-title: clamp(1.25rem, 0.75vw + 0.875rem, 1.625rem); --text-lead: clamp(1.125rem, 0.35vw + 1rem, 1.375rem);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 120ms;
+  --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px;
+  --z-tooltip: 600;
+  --masthead-h: 4rem;
+  --control-h: 2.5rem; --control-h-lg: 3rem; --control-h-touch: 3rem;
+
+  --color-paper: oklch(84% 0.012 245); --color-paper-2: oklch(81% 0.012 245);
+  --color-ink: oklch(16% 0.020 245); --color-ink-2: oklch(24% 0.018 245); --color-muted: oklch(38% 0.016 245);
+  --color-rule: oklch(73% 0.013 240); --color-rule-2: oklch(32% 0.018 240);
+  --color-accent: oklch(45% 0.180 350); --color-accent-2: oklch(37% 0.160 350); --color-accent-ink: oklch(97% 0.006 245); --color-focus: oklch(46% 0.190 350);
+  --color-sheet: oklch(93.5% 0.008 245); --color-sheet-2: oklch(89.5% 0.010 245);
+  --color-error: oklch(45% 0.190 27); --color-success: oklch(42% 0.120 150);
+
+  --font-display: "Onest", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Source Serif 4", ui-serif, Georgia, serif;
+  --font-outlier: "IBM Plex Mono", ui-monospace, monospace;
+  --radius-pill: 2px; --rule-hair: 1px; --rule-bar: 2px;
+  --tracking-display: -0.02em; --tracking-hero: -0.035em; --display-weight: 600;
+}
+@media (max-width: 60rem) { :root { --gutter: 24px; --section-gap-s: 80px; --section-gap: 96px; } }
+@media (max-width: 40rem) { :root { --gutter: 16px; --section-gap-s: 56px; --section-gap: 72px; --gap-columns: 16px; } }

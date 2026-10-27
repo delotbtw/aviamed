@@ -16,7 +16,7 @@ from app.repositories.reference import SpecialtyRepository, SportRepository
 
 ROLE_LABELS = {
     Role.ADMIN: "Администратор",
-    Role.REGISTRAR: "Регистратор",
+    Role.REGISTRAR: "Регистратура",
     Role.DOCTOR: "Врач",
     Role.COACH: "Тренер",
     Role.ATHLETE: "Спортсмен",
@@ -40,6 +40,8 @@ def session_url(request: Request) -> str:
 
 
 def forbidden_response(request: Request, user: User) -> Response:
+    if is_htmx(request):  # a whole page must never land inside a form: send the browser to the cabinet instead
+        return Response(status_code=status.HTTP_403_FORBIDDEN, headers={"HX-Redirect": "/cabinet"})
     return templates.TemplateResponse(
         request, "errors/forbidden.html", {"user": user, "role_labels": ROLE_LABELS}, status_code=403
     )

@@ -19,16 +19,18 @@ up: env  ## Собрать и поднять всё (http://localhost)
 	@echo "Первый админ: ADMIN_PASSWORD='<пароль>' make admin ADMIN_EMAIL=you@example.com"
 	@echo "Демо-пользователи (ТОЛЬКО локальный стенд): make seed CONFIRM=local"
 
-down:  ## Остановить (данные БД сохраняются)
-	docker compose down
+down:  ## Остановить всё, включая тестовую БД (данные БД сохраняются)
+	docker compose --profile test down
 
 restart: down up  ## Перезапустить
 
 logs:  ## Логи приложения (Ctrl+C — выйти)
 	docker compose logs -f app nginx
 
-ps:  ## Состояние контейнеров
-	docker compose ps
+ps:  ## Состояние контейнеров (включая тестовую БД)
+	docker compose --profile test ps
+
+status: ps  ## Алиас для ps
 
 migrate:  ## Применить миграции вручную
 	docker compose run --rm migrate
@@ -47,15 +49,13 @@ seed:  ## Демо-данные (только локальный стенд!): m
 shell-db:  ## psql в базе
 	docker compose exec postgres sh -c 'psql -U "$$POSTGRES_USER" "$$POSTGRES_DB"'
 
-test-db:  ## Поднять тестовый Postgres (порт 55432)
-	@docker inspect medcenter-test-pg >/dev/null 2>&1 || docker run -d --rm --name medcenter-test-pg -p 55432:5432 \
-		-e POSTGRES_USER=medcenter -e POSTGRES_PASSWORD=medcenter -e POSTGRES_DB=medcenter_test \
-		--tmpfs /var/lib/postgresql/data postgres:17-alpine
+test-db:  ## Поднять тестовый Postgres (127.0.0.1:55432, profile test)
+	docker compose --profile test up -d --wait postgres-test
 
-test-db-stop:  ## Остановить тестовый Postgres
-	-docker stop medcenter-test-pg
+test-db-stop:  ## Остановить и удалить только тестовый Postgres
+	docker compose --profile test rm -sf postgres-test
 
-test: test-db  ## Прогнать тесты
+test: test-db  ## Прогнать тесты (поднимает тестовую БД)
 	uv run pytest
 
 lint:  ## ruff check + format --check
@@ -65,5 +65,5 @@ fmt:  ## ruff format
 	uv run ruff format .
 
 reset:  ## Снести контейнеры И данные БД, поднять заново
-	docker compose down -v
+	docker compose --profile test down -v
 	$(MAKE) up

@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Нет доступа - Med Center{% endblock %}
+{% from "macros.html" import page_head %}
+{% block title %}Нет доступа, АвиаМед{% endblock %}
 {% block content %}
-  <section class="card card-narrow">
-    <h1>Нет доступа</h1>
-    <p>У роли «{{ role_labels[user.role] }}» нет доступа к этой странице.</p>
-    <p><a href="/cabinet">Вернуться в кабинет</a></p>
-  </section>
+  <div class="workspace workspace--narrow">
+    {{ page_head("Нет доступа", "У роли «" ~ role_labels[user.role] ~ "» нет доступа к этой странице.") }}
+    <a class="btn" href="/cabinet">Вернуться в кабинет</a>
+  </div>
 {% endblock %}

@@ -6,17 +6,18 @@ Integration tests against a real PostgreSQL and fakeredis. Spec: `docs/stages/st
 ## Run
 
 ```bash
-# 1. throwaway Postgres 17 on port 55432 (tmpfs, removed on stop): one command
-docker run -d --rm --name medcenter-test-pg -p 55432:5432 -e POSTGRES_USER=medcenter -e POSTGRES_PASSWORD=medcenter \
-  -e POSTGRES_DB=medcenter_test --tmpfs /var/lib/postgresql/data postgres:17-alpine
-
-# 2. tests
+make test        # starts postgres-test (compose profile `test`) and runs pytest
+# or step by step:
+make test-db     # docker compose --profile test up -d --wait postgres-test
 uv run pytest
+make test-db-stop  # remove only the test DB; `make down` stops everything incl. the test DB
 ```
+
+The test Postgres 17 is the `postgres-test` service in `docker-compose.yml` (project `med_center`): published on
+`127.0.0.1:55432` only, data on tmpfs, user/password `medcenter`, database `medcenter_test`. `make status` shows it.
 
 Another database: `TEST_DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/some_test_db uv run pytest`.
 The database name must contain `test` (the schema is dropped and recreated at session start).
-Stop Postgres: `docker stop medcenter-test-pg`.
 
 ## Design
 

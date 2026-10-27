@@ -1,15 +1,11 @@
-{% from "macros.html" import password_field %}
+{% from "macros.html" import alert, field, password_field, form_actions %}
 <div id="login-form">
-  {% if notice %}<div class="alert alert-info" role="status">{{ notice }}</div>{% endif %}
-  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
-  <form method="post" action="/login" hx-post="/login" hx-target="#login-form" hx-swap="outerHTML"
-        x-data="{ busy: false }" @htmx:before-request="busy = true" @htmx:after-request="busy = false">
+  {% if notice %}{{ alert("info", notice) }}{% endif %}
+  {% if error %}{{ alert("error", error) }}{% endif %}
+  <form method="post" action="/login" hx-post="/login" hx-target="#login-form" hx-swap="outerHTML">
     <input type="hidden" name="next" value="{{ next }}">
-    <div class="field">
-      <label for="f-email">Email</label>
-      <input id="f-email" name="email" type="email" value="{{ email }}" required autocomplete="username" autofocus>
-    </div>
-    {{ password_field("password", "Пароль", {}, autocomplete="current-password") }}
-    <button type="submit" class="btn btn-primary" :disabled="busy">Войти</button>
+    {{ field("email", "Email", {"email": email}, {}, type="email", required=true, autocomplete="username", autofocus=true, mark_required=false) }}
+    {{ password_field("password", "Пароль", {}, autocomplete="current-password", mark_required=false) }}
+    {{ form_actions("Войти") }}
   </form>
 </div>

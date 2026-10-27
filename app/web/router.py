@@ -1,6 +1,5 @@
 """Jinja2/HTMX pages. Thin: parse the form, call an existing service through DI, render the result."""
 
-from datetime import date
 from typing import Annotated, Any
 from urllib.parse import urlencode
 
@@ -21,6 +20,7 @@ from app.models.user import User
 from app.repositories.user import UserRepository
 from app.users.schemas import AthleteRegister, UserCreate
 from app.web import messages
+from app.web.dates import normalize_dates, show_dates
 from app.web.deps import (
     ROLE_LABELS,
     OptionalPageUser,
@@ -31,6 +31,7 @@ from app.web.deps import (
     is_htmx,
     require_page_roles,
 )
+from app.web.nav import nav_links
 
 router = APIRouter(include_in_schema=False)
 
@@ -40,6 +41,8 @@ STAFF_ROLES = (Role.DOCTOR, Role.REGISTRAR, Role.COACH, Role.ADMIN)
 
 
 def register_web_handlers(app: FastAPI) -> None:
+    templates.env.globals["nav_links"] = nav_links
+
     async def _page_response(request: Request, exc: PageResponse) -> Response:
         return exc.response
 
@@ -84,11 +87,12 @@ def echo(payload: dict[str, str]) -> dict[str, str]:
     return {k: v for k, v in payload.items() if k not in _NO_ECHO}
 
 
-def can_see(user: User, action: Action) -> bool:
-    return user.role in roles_for(action)
+# --------------------------------------------------------------------------- landing, login / logout / session
 
 
-# --------------------------------------------------------------------------- login / logout / session
+@router.get("/")
+async def index(request: Request, user: OptionalPageUser):
+    return templates.TemplateResponse(request, "index.html", {"user": user, "role_labels": ROLE_LABELS})
 
 
 def _login_context(next_: str | None, **extra: Any) -> dict[str, Any]:
@@ -201,8 +205,6 @@ async def cabinet(request: Request, user: PageUser):
         {
             "user": user,
             "role_labels": ROLE_LABELS,
-            "can_register_athlete": can_see(user, Action.ATHLETE_REGISTER),
-            "can_create_user": can_see(user, Action.USER_CREATE),
         },
     )
 
@@ -258,7 +260,6 @@ async def _athlete_context(user: User, sports: SportRepoDep, users: UserRepoDep,
         "sports": [(o.id, o.name) for o in await sports.list_all()],
         "coaches": [(c.id, f"{c.last_name} {c.first_name}") for c in await users.list_active_coaches()],
         "stages": list(TrainingStage),
-        "today": date.today().isoformat(),
         "values": {},
         "errors": {},
         "success": False,
@@ -288,12 +289,15 @@ async def athlete_submit(
     ip: ClientIp,
     user: User = Depends(_athlete_roles),
 ):
-    payload = await form_payload(request)
+    typed = await form_payload(request)
+    payload, date_errors = normalize_dates(typed)
     errors: dict[str, str] = {}
     code = status.HTTP_422_UNPROCESSABLE_CONTENT
     actor_id = user.id
     try:
-        await service.register(AthleteRegister.model_validate(payload), user, ip)
+        data = AthleteRegister.model_validate(payload)
+        if not date_errors:  # a date that could not be read is reported together with the other field errors
+            await service.register(data, user, ip)
     except ValidationError as exc:
         errors = messages.validation_errors(exc)
     except DomainError as exc:
@@ -301,25 +305,32 @@ async def athlete_submit(
         errors[messages.GENERAL] = messages.domain_message(exc)
         user = await _reload(users, actor_id)
     else:
-        context = await _athlete_context(user, sports, users, success=True)
-        return render(request, "cabinet/athlete_new.html", "partials/athlete_form.html", context)
-    context = await _athlete_context(user, sports, users, values=echo(payload), errors=errors)
+        if not date_errors:
+            context = await _athlete_context(user, sports, users, success=True)
+            return render(request, "cabinet/athlete_new.html", "partials/athlete_form.html", context)
+    context = await _athlete_context(
+        user, sports, users, values=show_dates(echo(typed)), errors={**errors, **date_errors}
+    )
     return render(request, "cabinet/athlete_new.html", "partials/athlete_form.html", context, code)
 
 
 async def _user_context(
     user: User, sports: SportRepoDep, specialties: SpecialtyRepoDep, **extra: Any
 ) -> dict[str, Any]:
-    return {
+    context = {
         "user": user,
         "sports": [(o.id, o.name) for o in await sports.list_all()],
         "specialties": [(o.id, o.name) for o in await specialties.list_all()],
-        "staff_roles": STAFF_ROLES,
+        "role_options": [(r.value, ROLE_LABELS[r]) for r in STAFF_ROLES],
         "values": {},
         "errors": {},
         "success": False,
         **extra,
     }
+    # Only a known staff role reaches the template (it goes into an Alpine expression and picks the visible fieldset).
+    chosen = context["values"].get("role")
+    context["selected_role"] = chosen if chosen in {r.value for r in STAFF_ROLES} else Role.DOCTOR.value
+    return context
 
 
 @router.get("/cabinet/users/new")

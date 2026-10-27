@@ -1,8 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -16,7 +15,7 @@ from app.core.config import get_settings
 from app.core.db import dispose_database, get_database
 from app.core.errors import register_exception_handlers
 from app.core.redis import close_redis
-from app.core.templating import APP_DIR, templates
+from app.core.templating import APP_DIR
 from app.core.web import origin_check_middleware
 from app.examinations.router import router as examinations_router
 from app.reference.router import router as reference_router
@@ -66,10 +65,6 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["system"])
     async def health() -> dict[str, str]:
         return {"status": "ok"}
-
-    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-    async def index(request: Request):
-        return templates.TemplateResponse(request, "index.html")
 
     return app
 

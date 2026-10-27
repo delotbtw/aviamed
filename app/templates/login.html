@@ -1,8 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Вход - Med Center{% endblock %}
+{% from "macros.html" import page_head %}
+{% block title %}Вход, АвиаМед{% endblock %}
 {% block content %}
-  <section class="card card-narrow">
-    <h1>Вход</h1>
-    {% include "partials/login_form.html" %}
-  </section>
+  <div class="workspace workspace--narrow">
+    {{ page_head("Вход", "Нет аккаунта? Его создаёт регистратура при личном визите.") }}
+    <section class="sheet" aria-label="Форма входа">
+      {% include "partials/login_form.html" %}
+    </section>
+  </div>
 {% endblock %}

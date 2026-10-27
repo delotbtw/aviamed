@@ -1,8 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Создание пользователя - Med Center{% endblock %}
+{% from "macros.html" import page_head %}
+{% block title %}Создание пользователя, АвиаМед{% endblock %}
 {% block content %}
-  <section class="card">
-    <h1>Создание пользователя</h1>
-    {% include "partials/user_form.html" %}
-  </section>
+  <div class="workspace">
+    {{ page_head("Создание пользователя") }}
+    <section class="sheet" aria-label="Форма создания пользователя">
+      {% include "partials/user_form.html" %}
+    </section>
+  </div>
 {% endblock %}

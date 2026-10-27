@@ -1,28 +1,30 @@
-{% from "macros.html" import field, password_field, select, form_errors %}
+{% from "macros.html" import alert, date_field, field, password_field, select, form_errors, required_note, form_actions %}
 <div id="athlete-form">
-  {% if success %}<div class="alert alert-success" role="status">Создан новый спортсмен. Сообщите ему пароль лично.</div>{% endif %}
+  {% if success %}{{ alert("success", "Создан новый спортсмен. Сообщите ему пароль лично.") }}{% endif %}
   {{ form_errors(errors) }}
-  <form method="post" action="/cabinet/athletes/new" hx-post="/cabinet/athletes/new" hx-target="#athlete-form" hx-swap="outerHTML"
-        x-data="{ busy: false }" @htmx:before-request="busy = true" @htmx:after-request="busy = false">
+  <form method="post" action="/cabinet/athletes/new" hx-post="/cabinet/athletes/new" hx-target="#athlete-form" hx-swap="outerHTML">
+    {{ required_note() }}
     <fieldset>
       <legend>Учётная запись</legend>
-      {{ field("email", "Email", values, errors, type="email", required=true, autocomplete="off") }}
-      {{ password_field("password", "Начальный пароль", errors, hint="От 10 до 128 символов, буква и цифра") }}
+      <div class="form-grid">
+        {{ field("email", "Email", values, errors, type="email", required=true, autocomplete="off") }}
+        {{ password_field("password", "Начальный пароль", errors, hint="От 10 до 128 символов, буква и цифра") }}
+      </div>
     </fieldset>
     <fieldset>
       <legend>Личные данные</legend>
-      <div class="grid">
+      <div class="form-grid">
         {{ field("last_name", "Фамилия", values, errors, required=true) }}
         {{ field("first_name", "Имя", values, errors, required=true) }}
         {{ field("middle_name", "Отчество", values, errors) }}
         {{ field("phone", "Телефон", values, errors, type="tel", autocomplete="off") }}
-        {{ field("birth_date", "Дата рождения", values, errors, type="date", required=true, max_value=today) }}
+        {{ date_field("birth_date", "Дата рождения", values, errors, required=true) }}
         {{ select("sex", "Пол", [("male", "Мужской"), ("female", "Женский")], values, errors, required=true, empty="Выберите") }}
       </div>
     </fieldset>
     <fieldset>
       <legend>Спорт</legend>
-      <div class="grid">
+      <div class="form-grid">
         {{ select("sport_id", "Вид спорта", sports, values, errors) }}
         {{ select("coach_id", "Тренер", coaches, values, errors) }}
         {{ field("faculty", "Факультет", values, errors) }}
@@ -33,12 +35,11 @@
     </fieldset>
     <fieldset>
       <legend>Согласие на обработку данных (бумажное)</legend>
-      <div class="grid">
+      <div class="form-grid">
         {{ field("consent_paper_number", "Номер согласия", values, errors, required=true) }}
-        {{ field("consent_signed_at", "Дата подписания", values, errors, type="date", required=true, max_value=today) }}
+        {{ date_field("consent_signed_at", "Дата подписания", values, errors, required=true) }}
       </div>
     </fieldset>
-    <button type="submit" class="btn btn-primary" :disabled="busy">Зарегистрировать</button>
-    <a class="btn" href="/cabinet">Назад</a>
+    {{ form_actions("Зарегистрировать", "/cabinet") }}
   </form>
 </div>

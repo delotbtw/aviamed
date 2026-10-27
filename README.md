@@ -1,4 +1,4 @@
-# Med Center
+# АвиаМед
 
 Система допуска спортсменов (медцентр вуза). Модульный монолит: FastAPI + Jinja2 + SQLAlchemy 2.x (async) + PostgreSQL + Redis.
 Документация: [docs/](docs/) (архитектура - `02_arch.md`, роли - `03_matrix.md`, модель данных - `04-data-model.md`).

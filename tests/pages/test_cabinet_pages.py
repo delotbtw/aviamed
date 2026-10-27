@@ -127,7 +127,7 @@ async def test_H12_user_form_has_role_dependent_doctor_fields(client, admin, web
     assert 'name="specialty_id"' in html
     assert 'name="cabinet"' in html
     assert 'name="can_issue_conclusion"' in html
-    assert "x-show" in html
+    assert ":hidden=" in html  # fieldsets are toggled with :hidden (a server-rendered hidden attribute beats x-show)
     assert "x-data" in html
     assert 'name="role"' in html
 
