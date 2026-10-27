@@ -36,6 +36,8 @@ from app.models.enums import Sex  # noqa: E402
 from app.models.reference import Specialty, Sport  # noqa: E402
 from app.models.user import AthleteProfile, CoachProfile, DoctorProfile, StaffProfile, User  # noqa: E402
 
+pytest_plugins = ("tests.schedule.fixtures",)  # stage 2: clock, settings, slots/appointments factories, invariants
+
 DEFAULT_PASSWORD = "Passw0rd-Test"
 BASE_URL = "https://test"  # https: auth cookies are Secure (debug=false) and httpx drops them on plain http
 
@@ -80,6 +82,8 @@ async def db_engine():
     async with engine.begin() as conn:
         await conn.execute(text("DROP SCHEMA public CASCADE"))
         await conn.execute(text("CREATE SCHEMA public"))
+        # Stage 2: ex_slots_no_overlap is an exclusion constraint over (doctor_id =, tstzrange &&) and needs btree_gist.
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
@@ -220,6 +224,12 @@ async def make_user(session_factory, specialty, sport):
         is_active: bool = True,
         coach_id: int | None = None,
         can_issue_conclusion: bool = False,
+        last_name: str = "Иванов",
+        first_name: str = "Иван",
+        middle_name: str | None = "Иванович",
+        specialty_id: int | None = None,
+        cabinet: str | None = None,
+        birth_date: date = date(2003, 5, 17),
     ) -> UserInfo:
         n = next(_counter)
         email = email or f"{role.value}{n}@example.com"
@@ -228,9 +238,9 @@ async def make_user(session_factory, specialty, sport):
                 email=email,
                 password_hash=cached_hash(password),
                 role=role,
-                last_name="Иванов",
-                first_name="Иван",
-                middle_name="Иванович",
+                last_name=last_name,
+                first_name=first_name,
+                middle_name=middle_name,
                 phone="+79990000000",
                 is_active=is_active,
             )
@@ -240,7 +250,10 @@ async def make_user(session_factory, specialty, sport):
                 case Role.DOCTOR:
                     s.add(
                         DoctorProfile(
-                            user_id=user.id, specialty_id=specialty, can_issue_conclusion=can_issue_conclusion
+                            user_id=user.id,
+                            specialty_id=specialty_id or specialty,
+                            cabinet=cabinet,
+                            can_issue_conclusion=can_issue_conclusion,
                         )
                     )
                 case Role.COACH:
@@ -249,7 +262,7 @@ async def make_user(session_factory, specialty, sport):
                     s.add(
                         AthleteProfile(
                             user_id=user.id,
-                            birth_date=date(2003, 5, 17),
+                            birth_date=birth_date,
                             sex=Sex.MALE,
                             sport_id=sport,
                             coach_id=coach_id,

@@ -37,6 +37,10 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
+markers = [
+    "slow: runs alembic in a subprocess against a scratch database (several seconds)",
+    "no_schedule_invariants: the test builds deliberately inconsistent schedule data, skip assert_schedule_invariants",
+]
 
 [tool.ruff]
 line-length = 120
