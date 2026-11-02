@@ -78,7 +78,10 @@ async def test_U2_U3_migrated_schema_has_the_stage_2_constraints(migrated):
             constraints = {
                 r.conname: (r.contype, r.definition)
                 for r in await conn.execute(
-                    text("SELECT conname, contype, pg_get_constraintdef(oid) AS definition FROM pg_constraint")
+                    text(
+                        "SELECT conname, contype::text AS contype, pg_get_constraintdef(oid) AS definition "
+                        "FROM pg_constraint"
+                    )
                 )
             }
             indexes = {
@@ -89,6 +92,7 @@ async def test_U2_U3_migrated_schema_has_the_stage_2_constraints(migrated):
         await engine.dispose()
 
     assert "uq_appointments_slot_id" not in constraints and "uq_appointments_slot_id" not in indexes
+    assert "uq_slots_doctor_id" not in constraints  # implied by ex_slots_no_overlap
     active = indexes["uq_appointments_slot_active"]
     assert "UNIQUE" in active and "(slot_id)" in active and "<> 'cancelled'" in active
     assert "btree_gist" in extensions
@@ -123,8 +127,8 @@ async def test_U2_migrated_database_enforces_the_partial_unique_index(migrated):
         with pytest.raises(Exception, match="ex_slots_no_overlap"):
             async with engine.begin() as conn:
                 await conn.execute(text(
-                    "INSERT INTO slots (doctor_id, start_at, end_at, status) "
-                    "VALUES (1, '2030-01-01 10:15+00', '2030-01-01 10:45+00', 'free')"
+                    "INSERT INTO slots (id, doctor_id, start_at, end_at, status) "
+                    "VALUES (2, 1, '2030-01-01 10:15+00', '2030-01-01 10:45+00', 'free')"
                 ))  # fmt: skip
     finally:
         await engine.dispose()

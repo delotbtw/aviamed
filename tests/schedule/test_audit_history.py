@@ -20,32 +20,32 @@ async def new_audit(audit, before: int) -> list[dict]:
     return (await audit())[before:]
 
 
-async def test_S1_slot_create(client, clock, doctor, audit):
+async def test_S1_slot_create(client, registrar, clock, doctor, audit):
     before = len(await audit())
 
-    resp = await post_slot(client, doctor, at(10))
+    resp = await post_slot(client, registrar, at(10), doctor=doctor)
 
     [row] = await new_audit(audit, before)
     assert (row["action"], row["user_id"], row["entity_type"], row["entity_id"]) == (
-        "slot_create", doctor.id, "slot", resp.json()["id"],
+        "slot_create", registrar.id, "slot", resp.json()["id"],
     )  # fmt: skip
     assert_no_private_values([row])
 
 
-async def test_S1_slot_close_and_reopen(client, clock, doctor, make_slot, audit):
+async def test_S1_slot_close_and_reopen(client, registrar, clock, doctor, make_slot, audit):
     slot_id = await make_slot(doctor, at(10))
     before = len(await audit())
 
-    await close_slot(client, doctor, slot_id)
+    await close_slot(client, registrar, slot_id)
     [closed] = await new_audit(audit, before)
-    await reopen_slot(client, doctor, slot_id)
+    await reopen_slot(client, registrar, slot_id)
     [_, reopened] = await new_audit(audit, before)
 
     assert (closed["action"], closed["user_id"], closed["entity_type"], closed["entity_id"]) == (
-        "slot_close", doctor.id, "slot", slot_id,
+        "slot_close", registrar.id, "slot", slot_id,
     )  # fmt: skip
     assert (reopened["action"], reopened["user_id"], reopened["entity_type"], reopened["entity_id"]) == (
-        "slot_reopen", doctor.id, "slot", slot_id,
+        "slot_reopen", registrar.id, "slot", slot_id,
     )  # fmt: skip
     assert_no_private_values([closed, reopened])
 
@@ -140,16 +140,16 @@ async def test_S2_arrival_history(client, clock, registrar, athlete, doctor, mak
     assert [tuple(r.values()) for r in rows] == [("appointment", appointment_id, "booked", "arrived", registrar.id)]
 
 
-async def test_S2_close_and_reopen_history(client, clock, doctor, make_slot, sql):
+async def test_S2_close_and_reopen_history(client, registrar, clock, doctor, make_slot, sql):
     slot_id = await make_slot(doctor, at(10))
 
-    await close_slot(client, doctor, slot_id)
-    await reopen_slot(client, doctor, slot_id)
+    await close_slot(client, registrar, slot_id)
+    await reopen_slot(client, registrar, slot_id)
 
     rows = await sql(
         "SELECT from_status, to_status, changed_by FROM status_history WHERE entity_type = 'slot' ORDER BY id"
     )
-    assert [tuple(r.values()) for r in rows] == [("free", "closed", doctor.id), ("closed", "free", doctor.id)]
+    assert [tuple(r.values()) for r in rows] == [("free", "closed", registrar.id), ("closed", "free", registrar.id)]
 
 
 async def test_S3_failed_attempts_leave_no_audit_and_no_history(
@@ -164,13 +164,13 @@ async def test_S3_failed_attempts_leave_no_audit_and_no_history(
         await book(client, athlete2, taken),  # 409 taken
         await book(client, athlete2, closed),  # 409 closed
         await book(client, athlete2, 99999),  # 404
-        await post_slot(client, doctor, at(10, 15)),  # 409 overlap
-        await post_slot(client, doctor, at(2, days=-1)),  # 422 in the past
+        await post_slot(client, registrar, at(10, 15), doctor=doctor),  # 409 overlap
+        await post_slot(client, registrar, at(2, days=-1), doctor=doctor),  # 422 in the past
         await post_slot(client, athlete, at(15), doctor=doctor),  # 403
         await cancel(client, athlete2, appointment_id),  # 404 foreign
         await arrive(client, registrar, appointment_id),  # 409 not today
         await no_show(client, registrar, appointment_id),  # 409 not ended
-        await close_slot(client, doctor, taken),  # 409 booked
+        await close_slot(client, registrar, taken),  # 409 booked
     ]
 
     assert [r.status_code for r in attempts] == [409, 409, 404, 409, 422, 403, 404, 409, 409, 409]
@@ -188,13 +188,13 @@ async def test_S3_listings_are_not_audited(client, clock, admin, athlete, doctor
     assert len(await audit()) == before
 
 
-async def test_S4_a_batch_of_n_slots_writes_n_audit_rows(client, clock, doctor, audit):
-    resp = await post_batch(client, doctor, at(9), at(11), 20)  # 6 slots
+async def test_S4_a_batch_of_n_slots_writes_n_audit_rows(client, registrar, clock, doctor, audit):
+    resp = await post_batch(client, registrar, at(9), at(11), 20, doctor=doctor)  # 6 slots
 
     assert resp.status_code == 201
     rows = await audit("slot_create")
     assert len(rows) == 6 and {r["entity_id"] for r in rows} == {s["id"] for s in resp.json()}
-    assert {r["user_id"] for r in rows} == {doctor.id}
+    assert {r["user_id"] for r in rows} == {registrar.id}
 
 
 def test_slot_transition_table_matches_the_spec():
@@ -202,7 +202,7 @@ def test_slot_transition_table_matches_the_spec():
     from app.services.status import SLOT_TRANSITIONS
 
     ath_staff = frozenset({Role.ATHLETE, Role.REGISTRAR, Role.ADMIN})
-    doc_admin = frozenset({Role.DOCTOR, Role.ADMIN})
+    doc_admin = frozenset({Role.REGISTRAR, Role.ADMIN})  # stage 2.1: the doctor no longer manages slots
     assert SLOT_TRANSITIONS == {
         (SlotStatus.FREE, SlotStatus.BOOKED): ath_staff,
         (SlotStatus.BOOKED, SlotStatus.FREE): ath_staff,

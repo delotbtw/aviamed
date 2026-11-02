@@ -182,11 +182,13 @@ async def test_cancel_rebook_cycles_in_parallel_keep_one_active_appointment(
     assert (await sql("SELECT status FROM slots"))[0]["status"] == expected_slot
 
 
-async def test_close_and_booking_race_never_closes_a_booked_slot(client, clock, doctor, athlete, make_slot, sql):
+async def test_close_and_booking_race_never_closes_a_booked_slot(
+    client, registrar, clock, doctor, athlete, make_slot, sql
+):
     for n in range(6):
         slot_id = await make_slot(doctor, at(8 + n))
 
-        closed, booked = await gather(close_slot(client, doctor, slot_id), book(client, athlete, slot_id))
+        closed, booked = await gather(close_slot(client, registrar, slot_id), book(client, athlete, slot_id))
 
         if closed.status_code == 204:
             assert booked.status_code == 409 and booked.json()["detail"] == "Slot is closed"
@@ -197,11 +199,11 @@ async def test_close_and_booking_race_never_closes_a_booked_slot(client, clock, 
             assert (await sql("SELECT status FROM slots WHERE id = :i", i=slot_id))[0]["status"] == "booked"
 
 
-async def test_reopen_and_booking_race(client, clock, doctor, athlete, make_slot, sql):
+async def test_reopen_and_booking_race(client, registrar, clock, doctor, athlete, make_slot, sql):
     for n in range(4):
         slot_id = await make_slot(doctor, at(8 + n), status="closed")
 
-        reopened, booked = await gather(reopen_slot(client, doctor, slot_id), book(client, athlete, slot_id))
+        reopened, booked = await gather(reopen_slot(client, registrar, slot_id), book(client, athlete, slot_id))
 
         assert reopened.status_code == 204
         assert booked.status_code in (201, 409)
@@ -209,13 +211,13 @@ async def test_reopen_and_booking_race(client, clock, doctor, athlete, make_slot
         assert (await sql("SELECT status FROM slots WHERE id = :i", i=slot_id))[0]["status"] == expected
 
 
-async def test_parallel_creation_of_overlapping_slots_creates_one(client, clock, doctor, admin, sql):
+async def test_parallel_creation_of_overlapping_slots_creates_one(client, registrar, clock, doctor, admin, sql):
     attempts = [
-        post_slot(client, doctor, at(10)),
-        post_slot(client, doctor, at(10)),
-        post_slot(client, doctor, at(10, 10), minutes=30),
-        post_slot(client, admin, at(10, 20), minutes=30, doctor=doctor),
-        post_slot(client, doctor, at(9, 45), minutes=30),
+        post_slot(client, registrar, at(10), doctor=doctor),
+        post_slot(client, registrar, at(10), doctor=doctor),
+        post_slot(client, registrar, at(10, 10), minutes=30, doctor=doctor),
+        post_slot(client, admin, at(10, 5), minutes=30, doctor=doctor),  # every pair of the five intersects
+        post_slot(client, registrar, at(9, 45), minutes=30, doctor=doctor),
     ]
 
     resps = await gather(*attempts)
@@ -225,8 +227,10 @@ async def test_parallel_creation_of_overlapping_slots_creates_one(client, clock,
     assert len(await sql("SELECT id FROM slots")) == 1
 
 
-async def test_parallel_creation_of_touching_slots_succeeds_for_all(client, clock, doctor, sql):
-    resps = await gather(*(post_slot(client, doctor, at(8) + timedelta(minutes=30 * i)) for i in range(8)))
+async def test_parallel_creation_of_touching_slots_succeeds_for_all(client, registrar, clock, doctor, sql):
+    resps = await gather(
+        *(post_slot(client, registrar, at(8) + timedelta(minutes=30 * i), doctor=doctor) for i in range(8))
+    )
 
     assert codes(resps) == [201] * 8
     assert len(await sql("SELECT id FROM slots")) == 8
@@ -258,12 +262,12 @@ async def test_mixed_workload_does_not_deadlock(
         if kind == "arrive":
             return arrive(client, registrar, rng.choice(appointments))
         if kind == "close":
-            return close_slot(client, rng.choice([doctor, doctor2, admin]), slot_id)
+            return close_slot(client, rng.choice([registrar, admin]), slot_id)
         if kind == "reopen":
-            return reopen_slot(client, rng.choice([doctor, doctor2, admin]), slot_id)
+            return reopen_slot(client, rng.choice([registrar, admin]), slot_id)
         if kind == "no_show":
             return no_show(client, registrar, rng.choice(appointments))
-        return post_slot(client, doctor, at(14, days=2) + timedelta(minutes=10 * n), minutes=10)
+        return post_slot(client, registrar, at(14, days=2) + timedelta(minutes=10 * n), minutes=10, doctor=doctor)
 
     resps = await gather(*(operation(n) for n in range(100)), timeout=30)
 

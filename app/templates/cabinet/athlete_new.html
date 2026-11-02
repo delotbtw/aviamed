@@ -2,10 +2,21 @@
 {% from "macros.html" import page_head %}
 {% block title %}Регистрация спортсмена, АвиаМед{% endblock %}
 {% block content %}
-  <div class="workspace">
-    {{ page_head("Регистрация спортсмена", "Начальный пароль задаёт регистратура и сообщает спортсмену лично.") }}
-    <section class="sheet" aria-label="Форма регистрации спортсмена">
-      {% include "partials/athlete_form.html" %}
-    </section>
+  <div class="workspace workspace--form">
+    {{ page_head("Регистрация спортсмена") }}
+    <div class="form-layout">
+      <section class="sheet" aria-label="Форма регистрации спортсмена">
+        {% include "partials/athlete_form.html" %}
+      </section>
+      <aside id="form-callout" class="callout" role="note" aria-labelledby="form-callout-title">
+        <h2 id="form-callout-title" class="callout__title">Перед регистрацией</h2>
+        <ul class="callout__list">
+          <li>Начальный пароль задаёт регистратура и сообщает спортсмену лично.</li>
+          <li>Пароль: от 10 до 128 символов, буква и цифра.</li>
+          <li>Обязательны: email, фамилия, имя, дата рождения и пол.</li>
+          <li>Нужны номер и дата подписания бумажного согласия.</li>
+        </ul>
+      </aside>
+    </div>
   </div>
 {% endblock %}

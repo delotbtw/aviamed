@@ -45,10 +45,13 @@
 | Действие | Кто |
 |---|---|
 | Список свободных слотов (по врачу, дате) | athlete, registrar, doctor, admin |
-| Создать слоты | admin, doctor (свои) |
+| Создать слот, пакет слотов (смена, нарезанная на интервалы) | admin, registrar (любой врач; `doctor_id` обязателен) |
+| Закрыть и открыть слот | admin, registrar |
+| Список слотов с признаком занятости (`GET /schedule/slots/all`, `SLOT_VIEW`) | admin, registrar (все), doctor (только свои; чужой `doctor_id` игнорируется) |
 | Записаться на слот | athlete (себе), registrar, admin |
 | Отменить запись | athlete (свою), registrar, admin |
-| Отметить приход | registrar |
+| Список записей (очередь, своя запись) | admin, registrar; athlete (свои) |
+| Отметить приход, неявку | registrar |
 
 ### cases
 | Действие | Кто |

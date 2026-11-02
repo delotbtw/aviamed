@@ -1,4 +1,4 @@
-.PHONY: help env build up down restart logs ps migrate admin seed shell-db test test-db test-db-stop lint fmt reset
+.PHONY: help env build up down restart logs ps migrate admin seed seed-demo shell-db test test-db test-db-stop lint fmt reset
 
 ADMIN_EMAIL ?= admin@example.com
 # ADMIN_PASSWORD has no default: pass it via the environment (ADMIN_PASSWORD=... make admin), not as a make argument.
@@ -7,8 +7,13 @@ export ADMIN_PASSWORD  # passed to containers by name (-e ADMIN_PASSWORD), never
 help:  ## Список команд
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
 
-env:  ## Создать .env из .env.example, если его нет
+env:  ## Создать .env из .env.example и сгенерировать SECRET_KEY, если там заглушка
 	@test -f .env || cp .env.example .env
+	@if grep -qi '^SECRET_KEY=.*change-me' .env; then \
+		key=$$(openssl rand -hex 32); \
+		sed -i.bak "s|^SECRET_KEY=.*|SECRET_KEY=$$key|" .env && rm -f .env.bak; \
+		echo "SECRET_KEY сгенерирован в .env"; \
+	fi
 
 build: env  ## Собрать образы
 	docker compose build
@@ -17,7 +22,7 @@ up: env  ## Собрать и поднять всё (http://localhost)
 	docker compose up --build -d
 	@echo "Открой http://localhost"
 	@echo "Первый админ: ADMIN_PASSWORD='<пароль>' make admin ADMIN_EMAIL=you@example.com"
-	@echo "Демо-пользователи (ТОЛЬКО локальный стенд): make seed CONFIRM=local"
+	@echo "Демо-пользователи (ТОЛЬКО локальный стенд): make seed-demo CONFIRM=local"
 
 down:  ## Остановить всё, включая тестовую БД (данные БД сохраняются)
 	docker compose --profile test down
@@ -42,9 +47,12 @@ admin:  ## Создать админа: ADMIN_PASSWORD='...' make admin ADMIN_EM
 
 # ТОЛЬКО ДЛЯ ЛОКАЛЬНОГО СТЕНДА: аккаунты с публично известным паролем. В compose DEBUG=false, поэтому нужен --force,
 # который передаётся только после явного подтверждения CONFIRM=local.
-seed:  ## Демо-данные (только локальный стенд!): make seed CONFIRM=local
-	@test "$(CONFIRM)" = "local" || { echo "Создаёт аккаунты с публичным паролем. Только для локального стенда: make seed CONFIRM=local"; exit 1; }
-	docker compose exec app python -m app.cli seed-demo --force
+# Вторым ключом идёт ALLOW_DEMO_SEED=1 (в боевом .env его нет, CLI без него отказывает); DEMO_PASSWORD пробрасывается по имени.
+seed-demo:  ## Демо-данные (только локальный стенд!): make seed-demo CONFIRM=local
+	@test "$(CONFIRM)" = "local" || { echo "Создаёт аккаунты с публичным паролем. Только для локального стенда: make seed-demo CONFIRM=local"; exit 1; }
+	docker compose exec -e ALLOW_DEMO_SEED=1 -e DEMO_PASSWORD app python -m app.cli seed-demo --force
+
+seed: seed-demo  ## Алиас для seed-demo
 
 shell-db:  ## psql в базе
 	docker compose exec postgres sh -c 'psql -U "$$POSTGRES_USER" "$$POSTGRES_DB"'

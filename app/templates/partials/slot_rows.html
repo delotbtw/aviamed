@@ -1,0 +1,9 @@
+{% from "schedule_macros.html" import slot_row %}
+{% for slot in slots %}{{ slot_row(slot, bookable, focus=(loop.first and offset > 0)) }}{% endfor %}
+{% if more_url %}
+  <tr id="load-more-row">
+    <td colspan="{{ 6 if bookable else 5 }}">
+      <button type="button" id="load-more" class="btn" hx-get="{{ more_url }}" hx-target="#load-more-row" hx-swap="outerHTML" hx-disabled-elt="this">Показать ещё</button>
+    </td>
+  </tr>
+{% endif %}

@@ -8,7 +8,7 @@
       <legend>Учётная запись</legend>
       <div class="form-grid">
         {{ field("email", "Email", values, errors, type="email", required=true, autocomplete="off") }}
-        {{ password_field("password", "Начальный пароль", errors, hint="От 10 до 128 символов, буква и цифра") }}
+        {{ password_field("password", "Начальный пароль", errors) }}
       </div>
     </fieldset>
     <fieldset>

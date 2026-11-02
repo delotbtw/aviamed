@@ -1,0 +1,9 @@
+{% if athletes %}
+  <ul class="picker__list" aria-label="Найденные спортсмены">
+    {% for athlete in athletes %}
+      <li data-athlete-id="{{ athlete.id }}" data-athlete-name="{{ athlete.name }}"><button type="button" class="picker__option">{{ athlete.name }}, {{ athlete.birth_date|page_date }}</button></li>
+    {% endfor %}
+  </ul>
+{% elif searched %}
+  <p class="hint">Никого не найдено</p>
+{% endif %}

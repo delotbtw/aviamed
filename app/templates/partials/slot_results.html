@@ -1,0 +1,20 @@
+{% if slots %}
+  <table id="slots-table" class="ledger ledger--data">
+    <caption class="visually-hidden">Свободные слоты</caption>
+    <thead>
+      <tr>
+        <th scope="col">Дата</th>
+        <th scope="col">Время</th>
+        <th scope="col">Врач</th>
+        <th scope="col">Специальность</th>
+        <th scope="col">Кабинет</th>
+        {% if bookable %}<th scope="col"><span class="visually-hidden">Действие</span></th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% include "partials/slot_rows.html" %}
+    </tbody>
+  </table>
+{% elif not errors %}
+  <p class="empty">Свободных слотов нет. Измените врача, специальность или даты.</p>
+{% endif %}

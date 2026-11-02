@@ -1,0 +1,21 @@
+{% from "macros.html" import alert, date_field, time_field, field, select, form_actions, form_errors %}
+<div id="slot-form-region">
+  {% if created %}{{ alert("success", "Создано слотов: " ~ created, id="slots-result") }}{% endif %}
+  {{ form_errors(errors) }}
+  <form id="slot-form" method="post" action="/cabinet/slots/new" hx-post="/cabinet/slots/new" hx-target="#slot-form-region" hx-swap="outerHTML">
+    <div class="form-grid">
+      {% if all_doctors %}{{ select("slot_doctor_id", "Врач", doctors, values, errors, required=true, empty="Выберите врача") }}{% endif %}
+      {{ date_field("slot_date", "Дата", values, errors, required=true) }}
+      {{ time_field("start_time", "Начало", values, errors, required=true) }}
+      {{ time_field("end_time", "Окончание", values, errors, required=true) }}
+      {{ field("slot_minutes", "Длина слота, мин", values, errors, inputmode="numeric", autocomplete="off", hint="Пусто: один слот на всё время") }}
+    </div>
+    {{ form_actions("Добавить") }}
+  </form>
+</div>
+{% if created %}
+  <div id="slots-table-region" class="results" hx-swap-oob="true">
+    {% include "partials/slots_table.html" %}
+  </div>
+  {% with oob=true %}{% include "partials/slots_filter.html" %}{% endwith %}
+{% endif %}

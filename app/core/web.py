@@ -63,7 +63,7 @@ async def origin_check_middleware(request: Request, call_next: RequestResponseEn
     if (
         origin
         and request.method in _UNSAFE_METHODS
-        and "authorization" not in request.headers
+        and not request.headers.get("authorization", "").lower().startswith("bearer ")
         and ("access_token" in request.cookies or "refresh_token" in request.cookies)
         and urlsplit(origin).hostname != request.url.hostname
     ):

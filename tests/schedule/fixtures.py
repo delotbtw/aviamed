@@ -149,8 +149,8 @@ async def force_status(sql):
     async def go(appointment_id: int, status: str) -> None:
         previous = {"arrived": "booked", "no_show": "booked", "done": "arrived", "cancelled": "booked"}[status]
         await sql(
-            "UPDATE appointments SET status = :st, cancelled_at = CASE WHEN :st = 'cancelled' THEN now() END "
-            "WHERE id = :i",
+            "UPDATE appointments SET status = :st, "
+            "cancelled_at = CASE WHEN CAST(:st AS varchar) = 'cancelled' THEN now() END WHERE id = :i",
             st=status,
             i=appointment_id,
         )
@@ -162,9 +162,15 @@ async def force_status(sql):
             t=status,
         )
         if status == "cancelled":
-            await sql(
-                "UPDATE slots SET status = 'free' WHERE id = (SELECT slot_id FROM appointments WHERE id = :i)",
+            [slot] = await sql(
+                "UPDATE slots SET status = 'free' WHERE id = (SELECT slot_id FROM appointments WHERE id = :i) "
+                "RETURNING id",
                 i=appointment_id,
+            )
+            await sql(
+                "INSERT INTO status_history (entity_type, entity_id, from_status, to_status) "
+                "VALUES ('slot', :s, 'booked', 'free')",
+                s=slot["id"],
             )
 
     return go

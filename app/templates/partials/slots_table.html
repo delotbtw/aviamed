@@ -1,0 +1,18 @@
+{% from "schedule_macros.html" import slot_unit %}
+{% if rows %}
+  <table id="slots-manage-table" class="ledger ledger--data">
+    <caption class="visually-hidden">Слоты на {{ day }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">Время</th>
+        {% if all_doctors %}<th scope="col">Врач</th>{% endif %}
+        <th scope="col">Статус</th>
+        <th scope="col">Спортсмен</th>
+        <th scope="col"><span class="visually-hidden">Действия</span></th>
+      </tr>
+    </thead>
+    {% for row in rows %}{{ slot_unit(row, all_doctors) }}{% endfor %}
+  </table>
+{% elif not filter_errors %}
+  <p class="empty">На {{ day }} слотов нет. Добавьте их в форме ниже.</p>
+{% endif %}

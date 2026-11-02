@@ -17,10 +17,10 @@ from app.core.templating import templates
 from app.core.web import clear_auth_cookies, safe_next, set_auth_cookies
 from app.models.enums import TrainingStage
 from app.models.user import User
-from app.repositories.user import UserRepository
 from app.users.schemas import AthleteRegister, UserCreate
 from app.web import messages
-from app.web.dates import normalize_dates, show_dates
+from app.web.appointment_pages import router as appointment_router
+from app.web.dates import local_date, local_time, normalize_dates, page_date, show_dates
 from app.web.deps import (
     ROLE_LABELS,
     OptionalPageUser,
@@ -31,17 +31,26 @@ from app.web.deps import (
     is_htmx,
     require_page_roles,
 )
+from app.web.forms import echo, form_payload, reload_actor, render
 from app.web.nav import nav_links
+from app.web.schedule_pages import router as schedule_router
+from app.web.schedule_view import APPOINTMENT_LABELS, SLOT_LABELS
+from app.web.slot_pages import router as slot_router
 
 router = APIRouter(include_in_schema=False)
+router.include_router(schedule_router)
+router.include_router(appointment_router)
+router.include_router(slot_router)
 
 WEB_LOGOUT_PATH = "/auth/web-logout"  # inside the refresh cookie's Path=/auth, so the browser sends the cookie here
-_NO_ECHO = frozenset({"password", "old_password", "new_password", "new_password_repeat"})
 STAFF_ROLES = (Role.DOCTOR, Role.REGISTRAR, Role.COACH, Role.ADMIN)
 
 
 def register_web_handlers(app: FastAPI) -> None:
     templates.env.globals["nav_links"] = nav_links
+    templates.env.globals["appointment_labels"] = APPOINTMENT_LABELS
+    templates.env.globals["slot_labels"] = SLOT_LABELS
+    templates.env.filters.update(local_date=local_date, local_time=local_time, page_date=page_date)
 
     async def _page_response(request: Request, exc: PageResponse) -> Response:
         return exc.response
@@ -50,13 +59,6 @@ def register_web_handlers(app: FastAPI) -> None:
 
 
 # --------------------------------------------------------------------------- helpers
-
-
-def render(request: Request, page: str, partial: str, context: dict[str, Any], status_code: int = 200) -> Response:
-    """Full page for a normal request, only the form fragment for HTMX."""
-    return templates.TemplateResponse(
-        request, partial if is_htmx(request) else page, {"role_labels": ROLE_LABELS, **context}, status_code=status_code
-    )
 
 
 def redirect(request: Request, url: str, *, clear_cookies: bool = False) -> Response:
@@ -68,23 +70,6 @@ def redirect(request: Request, url: str, *, clear_cookies: bool = False) -> Resp
     if clear_cookies:
         clear_auth_cookies(response)
     return response
-
-
-async def form_payload(request: Request) -> dict[str, str]:
-    """Form fields as a dict: values trimmed (passwords untouched), empty fields dropped."""
-    form = await request.form()
-    out: dict[str, str] = {}
-    for key, value in form.items():
-        if not isinstance(value, str):
-            continue
-        value = value if key in _NO_ECHO else value.strip()
-        if value != "":
-            out[key] = value
-    return out
-
-
-def echo(payload: dict[str, str]) -> dict[str, str]:
-    return {k: v for k, v in payload.items() if k not in _NO_ECHO}
 
 
 # --------------------------------------------------------------------------- landing, login / logout / session
@@ -246,14 +231,6 @@ async def password_submit(request: Request, user: PageUser, auth: AuthServiceDep
 # --------------------------------------------------------------------------- forms: athlete, staff user
 
 
-async def _reload(users: UserRepository, actor_id: int) -> User:
-    """A service may roll the transaction back (lost race), which expires loaded objects: reload the actor by id."""
-    actor = await users.get(actor_id)
-    if actor is None:  # users are never deleted, so this is not expected
-        raise AuthenticationFailed("Not authenticated")
-    return actor
-
-
 async def _athlete_context(user: User, sports: SportRepoDep, users: UserRepoDep, **extra: Any) -> dict[str, Any]:
     return {
         "user": user,
@@ -303,7 +280,7 @@ async def athlete_submit(
     except DomainError as exc:
         code = http_status_for(exc)
         errors[messages.GENERAL] = messages.domain_message(exc)
-        user = await _reload(users, actor_id)
+        user = await reload_actor(users, actor_id)
     else:
         if not date_errors:
             context = await _athlete_context(user, sports, users, success=True)
@@ -362,7 +339,7 @@ async def user_submit(
     except DomainError as exc:
         code = http_status_for(exc)
         errors[messages.GENERAL] = messages.domain_message(exc)
-        user = await _reload(users, actor_id)
+        user = await reload_actor(users, actor_id)
     else:
         context = await _user_context(user, sports, specialties, success=True)
         return render(request, "cabinet/user_new.html", "partials/user_form.html", context)

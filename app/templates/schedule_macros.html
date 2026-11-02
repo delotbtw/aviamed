@@ -1,0 +1,133 @@
+{# Tables and rows of the schedule pages. A row that HTMX replaces is wrapped in its own <tbody> (the unit), so an
+   error line under the row goes away together with the row on the next response. #}
+{% from "macros.html" import alert %}
+
+{# Search by surname + the chosen athlete. The hidden fields are what the page sends; app.js `athletePicker` fills them.
+   `apply` is a selector of a form to submit after a choice. #}
+{% macro athlete_picker(selected_id="", selected_name="", apply=none) %}
+  <div class="picker" x-data="athletePicker" data-selected-name="{{ selected_name }}"{% if apply %} data-apply="{{ apply }}"{% endif %} @click="pick($event)">
+    <div class="field">
+      <label for="athlete-search">Спортсмен</label>
+      <input id="athlete-search" name="q" type="search" autocomplete="off" maxlength="100" x-ref="search"
+             hx-get="/cabinet/schedule/athletes" hx-trigger="input changed delay:300ms, search" hx-target="#athlete-results" hx-sync="this:replace"
+             aria-describedby="h-athlete-search">
+      <small class="hint" id="h-athlete-search">Первые буквы фамилии, не меньше двух</small>
+    </div>
+    <div id="athlete-results" x-ref="results" aria-live="polite"></div>
+    <p id="selected-athlete" class="picker__chosen" aria-live="polite">
+      <span x-text="name || 'Спортсмен не выбран'">{{ selected_name or "Спортсмен не выбран" }}</span>
+      <button type="button" class="btn btn--quiet" hidden :hidden="!id" @click.stop="clear()">Сбросить выбор</button>
+    </p>
+    <input type="hidden" id="athlete-id" name="athlete_id" value="{{ selected_id }}" x-ref="id" :value="id">
+  </div>
+{% endmacro %}
+
+{# A free slot of the schedule table. `bookable`: the viewer may book (athlete, registrar, admin). #}
+{% macro slot_row(slot, bookable, focus=false) %}
+  <tr id="slot-{{ slot.id }}" data-status="free"{% if focus %} tabindex="-1" data-focus{% endif %}>
+    <td data-label="Дата" class="ledger__when">{{ slot.start_at|local_date }}</td>
+    <td data-label="Время" class="ledger__when">{{ slot.start_at|local_time }}</td>
+    <td data-label="Врач">{{ slot.doctor_name }}</td>
+    <td data-label="Специальность">{{ slot.specialty }}</td>
+    <td data-label="Кабинет">{{ slot.cabinet or "нет" }}</td>
+    {% if bookable %}
+      <td class="ledger__actions">
+        <button type="button" class="btn" data-action="book" hx-post="/cabinet/schedule/book" hx-vals='{{ {"slot_id": slot.id}|tojson }}'
+                hx-include="#athlete-id, #slot-filters" hx-target="#booking-result" hx-swap="outerHTML" hx-disabled-elt="this"
+                aria-label="Записаться: {{ slot.start_at|local_date }} {{ slot.start_at|local_time }}, {{ slot.doctor_name }}">Записаться</button>
+      </td>
+    {% endif %}
+  </tr>
+{% endmacro %}
+
+{# The line under a row with the reason an action did not go through. #}
+{% macro note_row(text, columns) %}
+  <tr class="ledger__note"><td colspan="{{ columns }}">{{ alert("error", text) }}</td></tr>
+{% endmacro %}
+
+{% macro appointment_unit(row, staff, error=none, focus=false) %}
+  {% set columns = 8 if staff else 7 %}
+  <tbody>
+    {% if row %}
+      {% set a = row.item %}
+      {% set when = a.start_at|local_date ~ " " ~ a.start_at|local_time %}
+      {% set who = a.athlete_name if staff else a.doctor_name %}
+      {% set prompts = {
+        "cancel": ("Отменить запись: " ~ a.athlete_name if staff else "Отменить запись к врачу " ~ a.doctor_name) ~ ", " ~ when ~ "?",
+        "no-show": "Отметить неявку: " ~ a.athlete_name ~ "?"} %}
+      {% set labels = {"arrive": "Пришёл", "no-show": "Не пришёл", "cancel": "Отменить"} %}
+      <tr id="appt-{{ a.id }}" data-status="{{ a.status }}"{% if focus %} tabindex="-1" data-focus{% endif %}
+          x-data="{ busy: false }" @htmx:before-request="busy = true" @htmx:after-request="busy = false">
+        <td data-label="Дата" class="ledger__when">{{ a.start_at|local_date }}</td>
+        <td data-label="Время" class="ledger__when">{{ a.start_at|local_time }} до {{ a.end_at|local_time }}</td>
+        {% if staff %}<td data-label="Спортсмен">{{ a.athlete_name }}</td>{% endif %}
+        <td data-label="Врач">{{ a.doctor_name }}{% if not a.doctor_active %} <small class="hint">врач не принимает</small>{% endif %}</td>
+        <td data-label="Специальность">{{ a.specialty }}</td>
+        <td data-label="Кабинет">{{ a.cabinet or "нет" }}</td>
+        <td data-label="Статус">{{ appointment_labels[a.status] }}</td>
+        <td class="ledger__actions">
+          {% if row.actions %}
+            <div class="row-actions">
+              {% for action in row.actions %}
+                <button type="button" class="btn" data-action="{{ action }}" aria-label="{{ labels[action] }}: {{ who }}, {{ when }}"
+                        hx-post="/cabinet/appointments/{{ a.id }}/{{ action }}" hx-target="closest tbody" hx-swap="outerHTML" hx-disabled-elt="this"
+                        :aria-busy="busy"
+                        {% if action in prompts %}hx-trigger="confirmed" @click='if (confirm({{ prompts[action]|tojson }})) $dispatch("confirmed")'{% endif %}>{{ labels[action] }}</button>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </td>
+      </tr>
+    {% endif %}
+    {% if error %}{{ note_row(error, columns) }}{% endif %}
+  </tbody>
+{% endmacro %}
+
+{# rows: AppointmentRow list. caption is read by screen readers only, the page heading says the same. #}
+{% macro appointments_table(rows, staff, caption, table_id=none) %}
+  <table{% if table_id %} id="{{ table_id }}"{% endif %} class="ledger ledger--data">
+    <caption class="visually-hidden">{{ caption }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">Дата</th>
+        <th scope="col">Время</th>
+        {% if staff %}<th scope="col">Спортсмен</th>{% endif %}
+        <th scope="col">Врач</th>
+        <th scope="col">Специальность</th>
+        <th scope="col">Кабинет</th>
+        <th scope="col">Статус</th>
+        <th scope="col"><span class="visually-hidden">Действия</span></th>
+      </tr>
+    </thead>
+    {% for row in rows %}{{ appointment_unit(row, staff) }}{% endfor %}
+  </table>
+{% endmacro %}
+
+{% macro slot_unit(row, show_doctor, error=none, focus=false) %}
+  {% set columns = 5 if show_doctor else 4 %}
+  <tbody>
+    {% if row %}
+      {% set s = row.item %}
+      {% set labels = {"close": "Закрыть", "reopen": "Открыть"} %}
+      <tr id="slot-{{ s.id }}" data-status="{{ s.status }}"{% if focus %} tabindex="-1" data-focus{% endif %}
+          x-data="{ busy: false }" @htmx:before-request="busy = true" @htmx:after-request="busy = false">
+        <td data-label="Время" class="ledger__when">{{ s.start_at|local_time }} до {{ s.end_at|local_time }}</td>
+        {% if show_doctor %}<td data-label="Врач">{{ s.doctor_name }}</td>{% endif %}
+        <td data-label="Статус">{{ slot_labels[s.status] }}</td>
+        <td data-label="Спортсмен">{{ s.appointment.athlete_name if s.appointment else "" }}</td>
+        <td class="ledger__actions">
+          {% if row.actions %}
+            <div class="row-actions">
+              {% for action in row.actions %}
+                <button type="button" class="btn" data-action="{{ action }}" aria-label="{{ labels[action] }}: {{ s.start_at|local_date }} {{ s.start_at|local_time }}"
+                        hx-post="/cabinet/slots/{{ s.id }}/{{ action }}" hx-target="closest tbody" hx-swap="outerHTML" hx-disabled-elt="this"
+                        :aria-busy="busy">{{ labels[action] }}</button>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </td>
+      </tr>
+    {% endif %}
+    {% if error %}{{ note_row(error, columns) }}{% endif %}
+  </tbody>
+{% endmacro %}

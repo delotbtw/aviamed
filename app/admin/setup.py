@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from sqladmin import Admin, ModelView
 from sqladmin.authentication import AuthenticationBackend
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from starlette.requests import Request
 
 from app.core.access_tokens import AccessTokenService
@@ -20,12 +20,16 @@ from app.models import (
     Sport,
     User,
 )
+from app.repositories.user import UserRepository
 
 
 class AdminAuth(AuthenticationBackend):
-    def __init__(self, secret_key: str, access_tokens: AccessTokenService) -> None:
+    def __init__(
+        self, secret_key: str, access_tokens: AccessTokenService, sessions: async_sessionmaker[AsyncSession]
+    ) -> None:
         super().__init__(secret_key=secret_key)
         self.access_tokens = access_tokens
+        self.sessions = sessions
 
     async def login(self, request: Request) -> bool:
         # TODO: login form -> verify credentials -> put access token into the session/cookie.
@@ -40,9 +44,12 @@ class AdminAuth(AuthenticationBackend):
         if not token:
             return False
         try:
-            return self.access_tokens.parse(token).role == Role.ADMIN
+            user_id = self.access_tokens.parse(token).user_id
         except AuthenticationFailed:
             return False
+        async with self.sessions() as session:  # the token may outlive a deactivation or a role change
+            user = await UserRepository(session).get(user_id)
+        return user is not None and user.is_active and user.role == Role.ADMIN
 
 
 class UserAdmin(ModelView, model=User):
@@ -95,7 +102,7 @@ def setup_admin(app: FastAPI, engine: AsyncEngine, secret_key: str, access_token
         app,
         engine,
         base_url="/admin",
-        authentication_backend=AdminAuth(secret_key, access_tokens),
+        authentication_backend=AdminAuth(secret_key, access_tokens, async_sessionmaker(engine, expire_on_commit=False)),
     )
     for view in (
         UserAdmin,

@@ -1,0 +1,10 @@
+{% from "macros.html" import date_field, select, form_actions %}
+<form id="slot-filters" class="filters" method="get" action="/cabinet/schedule" hx-get="/cabinet/schedule" hx-target="#slots-results" hx-push-url="true" hx-indicator="#slots-results" hx-sync="this:replace"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <div class="form-grid">
+    {{ select("doctor_id", "Врач", doctors, values, errors, empty="Все врачи") }}
+    {{ select("specialty_id", "Специальность", specialties, values, errors, empty="Все специальности") }}
+    {{ date_field("date_from", "Дата с", values, errors, hint=false) }}
+    {{ date_field("date_to", "Дата по", values, errors, hint=false) }}
+  </div>
+  {{ form_actions("Показать", "/cabinet/schedule", "Сбросить", guard=false) }}
+</form>

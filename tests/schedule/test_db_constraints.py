@@ -167,7 +167,7 @@ async def test_U2_full_unique_slot_id_is_gone_and_the_partial_one_exists(sql):
 
 async def test_U3_slot_constraints_and_indexes_exist(sql):
     constraints = {r["conname"]: r for r in await sql(
-        "SELECT conname, contype, pg_get_constraintdef(oid) AS definition FROM pg_constraint"
+        "SELECT conname, contype::text AS contype, pg_get_constraintdef(oid) AS definition FROM pg_constraint"
     )}  # fmt: skip
     indexes = {r["indexname"]: r["indexdef"] for r in await sql("SELECT indexname, indexdef FROM pg_indexes")}
     extensions = {r["extname"] for r in await sql("SELECT extname FROM pg_extension")}
@@ -181,3 +181,9 @@ async def test_U3_slot_constraints_and_indexes_exist(sql):
     assert check["contype"] == "c" and "end_at > start_at" in check["definition"]
     free_index = indexes["ix_slots_free_start_at"]
     assert "(start_at)" in free_index and "'free'" in free_index and "UNIQUE" not in free_index
+
+
+async def test_redundant_unique_pair_is_gone_the_exclusion_constraint_covers_it(sql):
+    constraints = {r["conname"] for r in await sql("SELECT conname FROM pg_constraint")}
+
+    assert "uq_slots_doctor_id" not in constraints

@@ -21,7 +21,7 @@ class CaseService:
         raise not_implemented()
 
     async def cancel(self, case_id: int, actor: User) -> None:
-        # TODO: services.status.change_status with CASE_TRANSITIONS.
+        # TODO: services.status.StatusChanger.change with CASE_TRANSITIONS.
         raise not_implemented()
 
     async def recalc_progress(self, case_id: int) -> None:

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}АвиаМед{% endblock %}</title>
   <meta name="description" content="{% block description %}АвиаМед: личный кабинет медицинского центра МАИ для спортсменов, тренеров и сотрудников.{% endblock %}">
+  <meta name="htmx-config" content='{"historyCacheSize": 0}'>
   <link rel="preload" href="{{ url_for('static', path='fonts/onest-var.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="{{ url_for('static', path='fonts/source-serif-4-var.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', path='css/base.css') }}?v={{ asset_version }}">
@@ -14,37 +15,47 @@
   <script defer src="{{ url_for('static', path='js/app.js') }}?v={{ asset_version }}"></script>
   <script defer src="{{ url_for('static', path='js/alpine-3.14.9.min.js') }}"></script>
 </head>
-<body x-data="{ busy: false }" @htmx:before-request="busy = true" @htmx:after-request="busy = false">
+<body x-data="{ busy: false, menuOpen: false }" @htmx:before-request="busy = true" @htmx:after-request="busy = false" @keydown.escape.window="if (menuOpen) { menuOpen = false; $refs.menuToggle.focus() }">
   <a class="skip-link" href="#main">К содержимому</a>
+  {% set show_shell = user is not none and not landing and not home %}
   <header class="masthead">
-    <div class="container masthead__bar"{% if user %} x-data="{ open: false }" :class="{ 'has-menu': true }" @keydown.escape="open = false"{% endif %}>
-      <a class="wordmark" href="{{ '/cabinet' if user else '/' }}" aria-label="АвиаМед, {{ 'кабинет' if user else 'главная страница' }}">АвиаМед</a>
+    <div class="container masthead__bar">
+      <a class="wordmark" href="{{ '/cabinet' if user else '/' }}" aria-label="АвиаМед, {{ 'главная' if user else 'главная страница' }}">АвиаМед</a>
       {% block nav %}
+        {% if show_shell %}
+          <button type="button" id="menu-toggle" class="btn btn--menu" x-ref="menuToggle" aria-controls="side-nav" :aria-expanded="menuOpen" aria-expanded="false" @click="menuOpen = !menuOpen">Меню</button>
+        {% endif %}
         {% if user %}
-          <button type="button" class="btn btn--menu" x-ref="menu" aria-controls="site-nav" :aria-expanded="open" @click="open = !open">Меню</button>
-          <nav id="site-nav" class="site-nav" :class="{ 'is-open': open }" aria-label="Основное меню">
-            <ul class="site-nav__links" @click="open = false">
-              {% for link in nav_links(user) %}
-                <li><a href="{{ link.href }}"{% if request.url.path == link.href %} aria-current="page"{% endif %}>{{ link.label }}</a></li>
-              {% endfor %}
-            </ul>
-            <div class="site-nav__user">
-              <span class="site-nav__name">{{ user.last_name }} {{ user.first_name }}</span>
-              {% if role_labels %}<span class="site-nav__role">{{ role_labels[user.role] }}</span>{% endif %}
-              <form method="post" action="/logout">
-                <button type="submit" class="btn btn--quiet">Выйти</button>
-              </form>
-            </div>
-          </nav>
+          <div id="user-box" class="user-box">
+            <span class="user-box__name">{{ user.last_name }} {{ user.first_name }}</span>
+            <form method="post" action="/logout">
+              <button type="submit" class="btn btn--quiet">Выйти</button>
+            </form>
+          </div>
         {% elif request.url.path != "/login" %}
-          <a class="btn" href="/login">Войти</a>
+          <a class="btn masthead__login" href="/login">Войти</a>
         {% endif %}
       {% endblock %}
     </div>
   </header>
-  <main id="main" class="{% block main_class %}container page{% endblock %}">
+  {% if show_shell %}
+    <div class="container shell">
+      <aside class="shell__aside" :class="{ 'is-open': menuOpen }">
+        <nav id="side-nav" class="side-nav" aria-label="Разделы" @click="if ($event.target.closest('a')) menuOpen = false">
+          <ul class="side-nav__list">
+            {% for link in nav_links(user) %}
+              {% set current = request.url.path == link.href or request.url.path.startswith(link.href ~ "/") %}
+              <li><a class="side-nav__link" href="{{ link.href }}" title="{{ link.note }}"{% if current %} aria-current="page"{% endif %}>{{ link.label }}</a></li>
+            {% endfor %}
+          </ul>
+        </nav>
+      </aside>
+      <div class="shell__scrim" :class="{ 'is-open': menuOpen }" @click="menuOpen = false; $refs.menuToggle.focus()"></div>
+    {% endif %}
+  <main id="main" class="{% if show_shell %}page shell__main{% elif not landing %}container page{% endif %}">
     {% block content %}{% endblock %}
   </main>
+  {% if show_shell %}</div>{% endif %}
   <footer class="footer">
     <div class="container footer__inner">
       <p class="footer__name">АвиаМед</p>

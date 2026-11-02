@@ -5,16 +5,15 @@
   {%- if hint %}h-{{ name }}{% endif %}{% if hint and errors.get(name) %} {% endif %}{% if errors.get(name) %}e-{{ name }}{% endif -%}
 {%- endmacro %}
 
-{% macro page_head(title, lead=none) %}
+{% macro page_head(title) %}
   <header class="page-head">
     <h1>{{ title }}</h1>
-    {% if lead %}<p class="page-head__lead">{{ lead }}</p>{% endif %}
   </header>
 {% endmacro %}
 
-{# kind: error | success | info. Errors are announced at once, the rest politely. #}
-{% macro alert(kind, text) %}
-  <div class="alert alert-{{ kind }}" role="{{ 'alert' if kind == 'error' else 'status' }}"{% if kind == 'error' %} tabindex="-1"{% endif %}>{{ text }}</div>
+{# kind: error | success | info. Errors are announced at once, the rest politely. `id` lets HTMX replace the box in place. #}
+{% macro alert(kind, text, id=none, focus=false) %}
+  <div{% if id %} id="{{ id }}"{% endif %} class="alert alert-{{ kind }}" role="{{ 'alert' if kind == 'error' else 'status' }}"{% if kind == 'error' or focus %} tabindex="-1"{% endif %}{% if focus %} data-focus{% endif %}>{{ text }}</div>
 {% endmacro %}
 
 {% macro form_errors(errors) %}
@@ -26,21 +25,23 @@
 {% endmacro %}
 
 {# `busy` comes from the Alpine scope on <body>. The button stays focusable and ignores clicks while a request is in flight. #}
-{% macro form_actions(submit_label, back_href=none, back_label="Назад") %}
+{# `guard=false` for filters: a search that is still running must not swallow the press of "Показать". #}
+{% macro form_actions(submit_label, back_href=none, back_label="Назад", guard=true) %}
   <div class="form-actions">
-    <button type="submit" class="btn btn--primary" :aria-disabled="busy" :aria-busy="busy" @click="if (busy) $event.preventDefault()">{{ submit_label }}</button>
-    <span class="visually-hidden" role="status" x-text="busy ? 'Отправка…' : ''"></span>
+    <button type="submit" class="btn btn--primary btn-primary"{% if guard %} :aria-disabled="busy" :aria-busy="busy" @click="if (busy) $event.preventDefault()"{% endif %}>{{ submit_label }}</button>
+    {% if guard %}<span class="visually-hidden" role="status" x-text="busy ? 'Отправка…' : ''"></span>{% endif %}
     {% if back_href %}<a class="btn" href="{{ back_href }}">{{ back_label }}</a>{% endif %}
   </div>
 {% endmacro %}
 
-{% macro field(name, label, values, errors, type="text", required=false, autocomplete=none, hint=none, autofocus=false, mark_required=true) %}
+{% macro field(name, label, values, errors, type="text", required=false, autocomplete=none, hint=none, autofocus=false, mark_required=true, inputmode=none) %}
   <div class="field">
     <label for="f-{{ name }}">{{ label }}{% if required and mark_required %} <span aria-hidden="true">*</span>{% endif %}</label>
     <input id="f-{{ name }}" name="{{ name }}" type="{{ type }}"
            {% if type != "password" %}value="{{ values.get(name, '') }}"{% endif %}
            {% if required %}required{% endif %}
            {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+           {% if inputmode %}inputmode="{{ inputmode }}"{% endif %}
            {% if autofocus %}autofocus{% endif %}
            {% if errors.get(name) %}aria-invalid="true"{% endif %}{% if hint or errors.get(name) %} aria-describedby="{{ describe(name, hint, errors) }}"{% endif %}
            >
@@ -49,13 +50,28 @@
   </div>
 {% endmacro %}
 
-{# A date typed as дд.мм.гггг whatever the browser locale; app.js adds the dots while typing. #}
-{% macro date_field(name, label, values, errors, required=false) %}
-  {% set hint = "Формат: дд.мм.гггг" %}
+{# A date typed as дд.мм.гггг whatever the browser locale; app.js adds the dots while typing. `hint=true` adds a visible hint (off by default: the placeholder shows the format). #}
+{% macro date_field(name, label, values, errors, required=false, hint=false) %}
+  {% set hint_text = "Формат: дд.мм.гггг" if hint else none %}
   <div class="field">
     <label for="f-{{ name }}">{{ label }}{% if required %} <span aria-hidden="true">*</span>{% endif %}</label>
     <input id="f-{{ name }}" name="{{ name }}" type="text" inputmode="numeric" autocomplete="off" maxlength="10"
            placeholder="дд.мм.гггг" pattern="\d{2}\.\d{2}\.\d{4}" title="Введите дату в формате дд.мм.гггг" data-date-mask
+           value="{{ values.get(name, '') }}"
+           {% if required %}required{% endif %}
+           {% if errors.get(name) %}aria-invalid="true"{% endif %}{% if hint_text or errors.get(name) %} aria-describedby="{{ describe(name, hint_text, errors) }}"{% endif %}>
+    {% if hint_text %}<small class="hint" id="h-{{ name }}">{{ hint_text }}</small>{% endif %}
+    {% if errors.get(name) %}<small class="error" id="e-{{ name }}">{{ errors[name] }}</small>{% endif %}
+  </div>
+{% endmacro %}
+
+{# A time typed as чч:мм; app.js adds the colon while typing. #}
+{% macro time_field(name, label, values, errors, required=false) %}
+  {% set hint = "Формат: чч:мм" %}
+  <div class="field">
+    <label for="f-{{ name }}">{{ label }}{% if required %} <span aria-hidden="true">*</span>{% endif %}</label>
+    <input id="f-{{ name }}" name="{{ name }}" type="text" inputmode="numeric" autocomplete="off" maxlength="5"
+           placeholder="чч:мм" pattern="\d{2}:\d{2}" title="Введите время в формате чч:мм" data-time-mask
            value="{{ values.get(name, '') }}"
            {% if required %}required{% endif %}
            {% if errors.get(name) %}aria-invalid="true"{% endif %} aria-describedby="{{ describe(name, hint, errors) }}">

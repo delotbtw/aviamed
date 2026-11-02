@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "macros.html" import page_head %}
+{% from "schedule_macros.html" import athlete_picker, appointments_table %}
+{% block title %}{{ "Очередь записей" if staff else "Моя запись" }}, АвиаМед{% endblock %}
+{% block content %}
+  <div class="workspace workspace--wide stack">
+    {% if staff %}
+      {{ page_head("Очередь записей") }}
+      <section class="sheet" aria-label="Записи на день">
+        {{ athlete_picker(values.get("athlete_id", ""), athlete_name, apply="#queue-filters") }}
+        {% include "partials/queue_filters.html" %}
+        <div id="queue-results" class="results">
+          {% include "partials/queue_results.html" %}
+        </div>
+      </section>
+    {% else %}
+      {{ page_head("Моя запись") }}
+      <section id="upcoming-appointments" class="sheet" aria-labelledby="upcoming-title">
+        <h2 id="upcoming-title" class="sheet__title">Предстоящие</h2>
+        {% if upcoming %}
+          {{ appointments_table(upcoming, false, "Предстоящие записи") }}
+        {% else %}
+          <p class="empty">Предстоящих записей нет. <a href="/cabinet/schedule">Выбрать свободный слот</a></p>
+        {% endif %}
+      </section>
+      <section id="appointment-history" class="sheet" aria-labelledby="history-title">
+        <h2 id="history-title" class="sheet__title">История</h2>
+        {% if history %}
+          {{ appointments_table(history, false, "История записей") }}
+        {% else %}
+          <p class="empty">Прошедших записей нет.</p>
+        {% endif %}
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

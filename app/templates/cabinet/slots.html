@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "macros.html" import page_head %}
+{% block title %}{{ "Моё расписание" if not can_manage else "Слоты приёма" }}, АвиаМед{% endblock %}
+{% block content %}
+  <div class="workspace workspace--wide stack">
+    {{ page_head("Слоты приёма" if can_manage else "Моё расписание") }}
+    {% include "partials/slots_filter.html" %}
+    <section class="sheet" aria-label="Слоты на день">
+      <div id="slots-table-region" class="results">
+        {% include "partials/slots_table.html" %}
+      </div>
+    </section>
+    {% if can_manage %}
+    <section id="slot-add" class="card" aria-labelledby="new-slots-title">
+      <h2 id="new-slots-title" class="card__title">Добавить слоты</h2>
+      {% include "partials/slot_form.html" %}
+    </section>
+    {% endif %}
+  </div>
+{% endblock %}

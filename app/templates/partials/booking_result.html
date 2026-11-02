@@ -1,0 +1,12 @@
+{% from "macros.html" import alert %}
+{% if booked %}
+  {{ alert("success", "Записано: " ~ (booked.start_at|local_date) ~ " в " ~ (booked.start_at|local_time) ~ ", врач " ~ booked.doctor_name ~ (", кабинет " ~ booked.cabinet if booked.cabinet else ""), id="booking-result", focus=true) }}
+  <template><tr id="slot-{{ booked.slot_id }}" hx-swap-oob="delete"></tr></template>
+{% else %}
+  {{ alert("error", error, id="booking-result") }}
+  {% if slots is defined %}
+    <div id="slots-results" class="results" hx-swap-oob="true">
+      {% include "partials/slot_results.html" %}
+    </div>
+  {% endif %}
+{% endif %}

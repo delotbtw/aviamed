@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
-from app.core.rbac import Action, Role, Scope, roles_for, scope_for
+from app.core.rbac import PERMISSIONS, Action, Role, Scope, roles_for, scope_for
 from tests.schedule.support import iso, msk
 
 ADMIN, REGISTRAR, DOCTOR, ATHLETE, COACH = Role.ADMIN, Role.REGISTRAR, Role.DOCTOR, Role.ATHLETE, Role.COACH
@@ -13,11 +13,11 @@ ALL_ROLES = [ADMIN, REGISTRAR, DOCTOR, ATHLETE, COACH]
 
 ALLOWED: dict[str, set[Role]] = {
     "free_slots": {ADMIN, REGISTRAR, DOCTOR, ATHLETE},
-    "manage_slots": {ADMIN, DOCTOR},
-    "create_slot": {ADMIN, DOCTOR},
-    "create_batch": {ADMIN, DOCTOR},
-    "close_slot": {ADMIN, DOCTOR},
-    "reopen_slot": {ADMIN, DOCTOR},
+    "manage_slots": {ADMIN, REGISTRAR, DOCTOR},  # SLOT_VIEW (doctor: own slots only)
+    "create_slot": {ADMIN, REGISTRAR},  # SLOT_CREATE (stage 2.1: the doctor no longer manages slots)
+    "create_batch": {ADMIN, REGISTRAR},
+    "close_slot": {ADMIN, REGISTRAR},
+    "reopen_slot": {ADMIN, REGISTRAR},
     "book": {ADMIN, REGISTRAR, ATHLETE},
     "list_appointments": {ADMIN, REGISTRAR, ATHLETE},
     "cancel": {ADMIN, REGISTRAR, ATHLETE},
@@ -41,7 +41,7 @@ async def world(client, clock, athlete, doctor, make_slot, insert_booking):
 
 def build_request(endpoint: str, actor, w: dict) -> tuple[str, str, dict]:
     start, end = msk(2026, 11, 4, 10), msk(2026, 11, 4, 10, 30)
-    doctor_part = {"doctor_id": w["doctor"].id} if actor.role is ADMIN else {}
+    doctor_part = {"doctor_id": w["doctor"].id} if actor.role in (ADMIN, REGISTRAR) else {}
     athlete_part = {} if actor.role is ATHLETE else {"athlete_id": w["athlete"].id}
     aid, free, closed = w["appointment_id"], w["free_slot"], w["closed_slot"]
     return {
@@ -131,3 +131,47 @@ def test_R_matrix_document_has_the_appointment_view_row():
     )
     assert admin.startswith("✓") and registrar.startswith("✓") and athlete == "свои" and coach == "—"
     assert "ФИО" in doctor
+
+
+def test_R9_slot_create_is_for_admin_and_registrar_only():
+    assert roles_for(Action.SLOT_CREATE) == {ADMIN, REGISTRAR}
+    assert DOCTOR not in PERMISSIONS[Action.SLOT_CREATE]
+    assert scope_for(Action.SLOT_CREATE, ADMIN) is Scope.FULL
+    assert scope_for(Action.SLOT_CREATE, REGISTRAR) is Scope.FULL
+    assert scope_for(Action.SLOT_CREATE, DOCTOR) is None
+
+
+def test_R9_slot_view_action_matches_the_matrix():
+    slot_view = Action("slot_view")  # the new action must exist under this value
+
+    assert PERMISSIONS[slot_view] == {ADMIN: Scope.FULL, REGISTRAR: Scope.FULL, DOCTOR: Scope.OWN}
+    assert scope_for(slot_view, ATHLETE) is None and scope_for(slot_view, COACH) is None
+
+
+@pytest.mark.parametrize("method", ["create_slot", "create_batch", "close", "reopen"])
+async def test_R10_slot_service_itself_refuses_a_doctor(method):
+    """The check lives in the service, not only in the router (spec 3.4). Dependencies are never reached."""
+    from datetime import timedelta
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.core.exceptions import PermissionDenied
+    from app.models.user import User
+    from app.schedule.schemas import SlotBatchCreate, SlotCreate
+    from app.schedule.slots import SlotService
+
+    deps = {name: MagicMock() for name in ("users", "slots", "status", "audit", "planner", "clock", "settings")}
+    uow = AsyncMock()
+    service = SlotService(uow, **deps)
+    doctor = User(id=7, role=DOCTOR)
+    start = msk(2026, 11, 4, 10)
+    single = SlotCreate(start_at=start, end_at=start + timedelta(minutes=30), doctor_id=7)
+    batch = SlotBatchCreate(start_at=start, end_at=start + timedelta(hours=1), slot_minutes=30, doctor_id=7)
+    call = {
+        "create_slot": lambda: service.create_slot(single, doctor),
+        "create_batch": lambda: service.create_batch(batch, doctor),
+        "close": lambda: service.close(1, doctor),
+        "reopen": lambda: service.reopen(1, doctor),
+    }[method]
+
+    with pytest.raises(PermissionDenied):
+        await call()

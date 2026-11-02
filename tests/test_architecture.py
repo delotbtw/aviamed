@@ -37,3 +37,15 @@ def test_services_do_not_depend_on_http_or_orm_session():
     # stubs of later stages still take AsyncSession; the stage-1 services must not
     stage1 = {o for o in offenders if o.split("/")[0] in {"auth", "users", "audit"}}
     assert stage1 == set()
+
+
+def test_schedule_modules_do_not_depend_on_http_or_the_database_layer():
+    """Services and policies raise domain errors; HTTP lives in router.py, SQL and driver errors in repositories."""
+    offenders = {
+        f"{path.name} -> {module}"
+        for path in (APP / "schedule").glob("*.py")
+        if path.name != "router.py"
+        for module in imported_modules(path)
+        if module.split(".")[0] in {"fastapi", "sqlalchemy", "asyncpg"}
+    }
+    assert offenders == set()

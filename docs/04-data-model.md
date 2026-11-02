@@ -101,11 +101,11 @@
 
 ## 4. Расписание
 
-**slots**: `doctor_id`, `start_at`, `end_at`, `status` (free / booked / closed). Уникальность пары (doctor_id, start_at).
+**slots**: `doctor_id`, `start_at`, `end_at`, `status` (free / booked / closed). Слоты одного врача не пересекаются (exclusion constraint `ex_slots_no_overlap`, расширение `btree_gist`); он же гарантирует уникальность пары (doctor_id, start_at), отдельного уникального ограничения нет, `end_at > start_at`; частичный индекс `ix_slots_free_start_at` по свободным слотам.
 
-**appointments**: `slot_id` (уникальный), `athlete_id`, `case_id`, `status`, `created_by`, `created_at`, `cancelled_at`.
+**appointments**: `slot_id` (уникален среди неотменённых записей: частичный индекс `uq_appointments_slot_active`), `athlete_id`, `case_id`, `status`, `created_by`, `created_at`, `cancelled_at`.
 
-Уникальность `slot_id` в appointments гарантирует на уровне БД, что на один слот записан один человек, даже при одновременных запросах.
+Уникальность `slot_id` среди неотменённых записей гарантирует на уровне БД, что на один слот записан один человек, даже при одновременных запросах.
 
 ## 5. Согласия
 

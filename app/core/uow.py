@@ -2,6 +2,7 @@
 
 from typing import Protocol
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -9,6 +10,10 @@ class UnitOfWork(Protocol):
     async def commit(self) -> None: ...
 
     async def rollback(self) -> None: ...
+
+    async def set_lock_timeout(self, milliseconds: int) -> None:
+        """Limit the wait for row locks in the current transaction."""
+        ...
 
 
 class SqlAlchemyUnitOfWork:
@@ -20,3 +25,6 @@ class SqlAlchemyUnitOfWork:
 
     async def rollback(self) -> None:
         await self.session.rollback()
+
+    async def set_lock_timeout(self, milliseconds: int) -> None:
+        await self.session.execute(text("SELECT set_config('lock_timeout', :ms, true)"), {"ms": str(milliseconds)})

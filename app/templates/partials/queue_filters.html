@@ -1,0 +1,9 @@
+{% from "macros.html" import date_field, select, form_actions %}
+<form id="queue-filters" class="filters" method="get" action="/cabinet/appointments" hx-get="/cabinet/appointments" hx-target="#queue-results" hx-push-url="true" hx-include="#athlete-id" hx-indicator="#queue-results" hx-sync="this:replace"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <div class="form-grid">
+    {{ date_field("date", "Дата", values, errors, hint=false) }}
+    {{ select("doctor_id", "Врач", doctors, values, errors, empty="Все врачи") }}
+    {{ select("status", "Статус", statuses, values, errors, empty="Любой") }}
+  </div>
+  {{ form_actions("Показать", "/cabinet/appointments", "Сбросить", guard=false) }}
+</form>

@@ -1,0 +1,8 @@
+{% from "macros.html" import date_field, select, form_actions %}
+<form id="slots-filter" class="filter-bar" method="get" action="/cabinet/slots" hx-get="/cabinet/slots" hx-target="#slots-table-region" hx-push-url="true" hx-indicator="#slots-table-region" hx-sync="this:replace"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <div class="filter-bar__fields">
+    {{ date_field("date", "Показать слоты на дату", filter_values, filter_errors, hint=false) }}
+    {% if all_doctors %}{{ select("doctor_id", "Врач", doctors, filter_values, filter_errors, empty="Все врачи") }}{% endif %}
+  </div>
+  {{ form_actions("Показать", "/cabinet/slots", "Сбросить", guard=false) }}
+</form>

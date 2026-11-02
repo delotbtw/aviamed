@@ -31,7 +31,8 @@ class PageResponse(Exception):
 
 
 def is_htmx(request: Request) -> bool:
-    return request.headers.get("hx-request") == "true"
+    """An HTMX request for a fragment (restoring a page from history carries HX-Request too, and wants the page)."""
+    return request.headers.get("hx-request") == "true" and request.headers.get("hx-history-restore-request") != "true"
 
 
 def session_url(request: Request) -> str:
@@ -42,9 +43,7 @@ def session_url(request: Request) -> str:
 def forbidden_response(request: Request, user: User) -> Response:
     if is_htmx(request):  # a whole page must never land inside a form: send the browser to the cabinet instead
         return Response(status_code=status.HTTP_403_FORBIDDEN, headers={"HX-Redirect": "/cabinet"})
-    return templates.TemplateResponse(
-        request, "errors/forbidden.html", {"user": user, "role_labels": ROLE_LABELS}, status_code=403
-    )
+    return templates.TemplateResponse(request, "errors/forbidden.html", {"user": user}, status_code=403)
 
 
 async def get_optional_page_user(request: Request, users: UserRepoDep, access_tokens: AccessTokensDep) -> User | None:

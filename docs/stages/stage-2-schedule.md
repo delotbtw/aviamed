@@ -2,6 +2,8 @@
 
 *Спецификация v1.0, 27.10.2026. Опирается на docs/02, 03, 04, 05, 07, 08, 09, 10, на этап 1 (docs/stages/stage-1-auth-users.md) и код коммита 3cc7470. Предположения помечены `ASSUMPTION`, все решения по умолчанию собраны в разделе 9.*
 
+> **Изменено этапом 2.1 (`stage-2-1-polish.md`, разд. 3, 4.1):** слоты создают, закрывают и открывают только admin и registrar (`SLOT_CREATE`; `doctor_id` обязателен, врач 403, в том числе в сервисе). Врач читает только свои слоты (`SLOT_VIEW`, чужой `doctor_id` в `/slots/all` игнорируется, а не 403). `SLOT_TRANSITIONS`: free <-> closed только registrar, admin. Ниже тексты про «врач создаёт/закрывает свои слоты» (J-1, J-3, 3.3-3.6, страницы `/cabinet/slots`) устарели.
+
 ## 1. Цель и границы
 
 **Цель.** Врач (и админ) публикует слоты приёма. Спортсмен сам, а регистратура или админ за него, записывается на свободный слот и может отменить запись. В день приёма регистратура отмечает приход. Двойная запись на слот невозможна ни при каких гонках: гарантия лежит в БД, приложение даёт понятное сообщение. Все действия попадают в `audit_log` и `status_history`.
@@ -85,7 +87,7 @@
 - **Правила:**
   1. Слот создаётся `status=free`, `created_by` = actor.
   2. Пересечение: интервалы `[start_at, end_at)` слотов одного врача не пересекаются; соприкасающиеся (конец = начало следующего) допустимы. Проверка идёт среди слотов любого статуса, включая закрытые (иначе открытие закрытого слота нарушило бы инвариант). Гарантия в БД: exclusion constraint (раздел 7.3); сервис дополнительно проверяет под блокировкой строки врача ради понятной ошибки.
-  3. Дубль `(doctor_id, start_at)` (`uq_slots_doctor_id`) тоже 409 `Slots overlap`.
+  3. Дубль `(doctor_id, start_at)` тоже 409 `Slots overlap`: это частный случай пересечения. Отдельное ограничение `uq_slots_doctor_id` удалено миграцией этапа 2 как избыточное (решение заказчика): `ex_slots_no_overlap` и CHECK `end_at > start_at` уже влекут уникальность пары.
 - **Аудит:** `slot_create` (entity slot, id).
 
 ### 3.4 POST /schedule/slots/batch (смена, нарезанная на слоты)
@@ -321,8 +323,9 @@
 Поверх ревизии `378a416b2f4b` (и ревизий этапа 1, если они есть). Все описываются и в моделях, чтобы `alembic check` был чистым.
 1. **Запись можно отменить и записаться снова.** Сейчас `appointments.slot_id` полностью уникален (`uq_appointments_slot_id`): отменённая запись (строка остаётся как история) навсегда блокировала бы слот. Заменить на частичный уникальный индекс `uq_appointments_slot_active` на `(slot_id)` с условием `status <> 'cancelled'` (`done`, `no_show`, `arrived`, `booked` занимают слот). Инвариант "на слот не более одной активной записи" остаётся на уровне БД. В модели `unique=True` у `slot_id` убирается, индекс описывается в `__table_args__`. Откат миграции возможен, только если нет двух записей на один слот (иначе `downgrade` падает с понятным сообщением); данных до этапа 2 нет.
 2. **Пересечение слотов одного врача.** Расширение `btree_gist`, `ExcludeConstraint` `ex_slots_no_overlap`: `doctor_id WITH =`, `tstzrange(start_at, end_at, '[)') WITH &&`. CHECK `ck_slots_end_after_start` (`end_at > start_at`). Если `CREATE EXTENSION` недоступен ролью БД, миграция падает с понятной ошибкой, а требование обеспечивается блокировкой строки врача (раздел 11) и тестом J-7, но не J-10; это фиксируется как отклонение до устранения. ASSUMPTION: в docker-compose миграции идут от владельца БД, расширение доступно.
-3. **Частичный индекс свободных слотов** `ix_slots_free_start_at` на `slots(start_at)` с условием `status = 'free'` под основной запрос списка.
-4. Запись `slots.status` и активных записей согласована приложением в одной транзакции; отдельного триггера нет. Согласованность проверяется `assert_schedule_invariants`.
+3. **Удаление избыточного `uq_slots_doctor_id`** (решение заказчика): уникальность пары `(doctor_id, start_at)` следует из `ex_slots_no_overlap`; при откате ограничение возвращается.
+4. **Частичный индекс свободных слотов** `ix_slots_free_start_at` на `slots(start_at)` с условием `status = 'free'` под основной запрос списка.
+5. Запись `slots.status` и активных записей согласована приложением в одной транзакции; отдельного триггера нет. Согласованность проверяется `assert_schedule_invariants`.
 
 После миграции обновляются docs/04 (`appointments`: уникальность только среди неотменённых; ограничения слотов), docs/03 (строка "Просмотр записей"), docs/07 (перечень ручек), docs/05 (отмена и новая запись создают новую строку).
 
@@ -405,7 +408,7 @@
 | Отмена и приход одной записи | Одна блокировка записи: ровно одно действие выигрывает, второе 409 | `test_cancel_and_arrive_race_has_one_winner` |
 | Отмена записи и деактивация/закрытие слота | Закрытие слота занятого слота невозможно; запись и закрытие на одном слоте сериализованы | `test_close_and_booking_race_never_closes_a_booked_slot` |
 | Приход и изменение дела | `appointments` -> `medical_cases` + `version_id_col`; проигравший 409 без частичных изменений | `test_arrival_and_concurrent_case_update_leaves_no_partial_change` |
-| `POST /schedule/slots`, `batch` | Блокировка `users` врача; `ex_slots_no_overlap` и `uq_slots_doctor_id`; пакет одним коммитом | `test_parallel_creation_of_overlapping_slots_creates_one`, `test_K6_*`, `test_exclusion_constraint_rejects_overlap_without_the_lock` |
+| `POST /schedule/slots`, `batch` | Блокировка `users` врача; `ex_slots_no_overlap`; пакет одним коммитом | `test_parallel_creation_of_overlapping_slots_creates_one`, `test_K6_*`, `test_exclusion_constraint_rejects_overlap_without_the_lock` |
 | Отсутствие дедлоков | Единый порядок блокировок; общий таймаут тестов | `test_mixed_workload_does_not_deadlock` (запись, отмена, приход, закрытие, создание на общем наборе слотов, 100 параллельных операций) |
 
 **Инвариант `assert_schedule_invariants`** (проверяется после каждого теста этого этапа и в конце параллельных сценариев): для каждого слота число записей `booked/arrived/done/no_show` не больше одного; `slots.status=booked` тогда и только тогда, когда есть такая запись; `free` и `closed` без активной записи; у отменённой записи `cancelled_at` заполнен; для каждого перехода есть строка `status_history`; соседние слоты врача не пересекаются.
@@ -427,7 +430,7 @@
 **Ограничения.** Деактивация врача или спортсмена между проверкой и коммитом закрывается блокировкой строки пользователя в операции записи (`is_active` читается под блокировкой); для врача слота `is_active` читается тем же запросом после блокировки слота (врач не блокируется, деактивация врача и запись могут идти параллельно, окно допустимо: запись создаётся на слот, который в момент проверки был доступен; деактивация не отменяет записи, раздел 9 п.14). Выбор `case_id` проверяется под блокировкой дела. Физического удаления нет, внешние ключи `RESTRICT`.
 
 
-## 10. Решения заказчика (подтверждено 27.10.2026)
+## 10.1 Решения заказчика (подтверждено 27.10.2026)
 
 Все решения по умолчанию раздела 9 приняты. Особо подтверждено:
 - Миграция обязательна: частичный уникальный индекс `appointments.slot_id` (кроме `cancelled`), `btree_gist` + `ex_slots_no_overlap`, CHECK `end_at > start_at`, индекс свободных слотов.
@@ -437,3 +440,79 @@
 - Приход: только регистратура, админу запрещён. Лимиты и горизонт как в разделе 9.
 - Деактивация врача записи не отменяет.
 - Порядок реализации: тесты, затем бэкенд, затем фронтенд (последовательно). Спека этапа 3 пишется параллельно.
+
+
+## 12. Контракт для тестов и фронтенда
+
+Фиксирует имена, которых нет в разделах 3-7. Тесты (`tests/schedule/`, `tests/pages/test_schedule_*.py`, `test_appointments_pages.py`, `test_slots_pages.py`) написаны под этот контракт; реализация обязана ему следовать.
+
+### 12.1 Backend
+- **Часы.** `app/core/clock.py`: `Clock` (протокол с `now() -> datetime`, aware UTC), `SystemClock`, FastAPI-зависимость `get_clock() -> Clock`. Единственный источник "сейчас" для сервиса, роутеров и страниц; тесты подменяют `app.dependency_overrides[get_clock]`. `datetime.now()` в коде этапа не вызывается.
+- **Настройки** (`Settings`, env-имена без префикса): `SCHEDULE_TIMEZONE`, `SCHEDULE_HORIZON_DAYS`, `SLOT_MIN_MINUTES`, `SLOT_MAX_MINUTES`, `BATCH_MAX_SLOTS`, `MAX_ACTIVE_APPOINTMENTS`, `SCHEDULE_LOCK_TIMEOUT_MS`. Читаются через `get_settings()` при каждом запросе (тесты меняют env и сбрасывают `get_settings.cache_clear()`); таймзона для шаблонов и границ дат берётся оттуда же, не константой.
+- **Исключения** `SlotTaken`, `SlotUnavailable`, `SlotOverlap`, `AppointmentConflict` импортируются из `app.schedule.service` и наследуют `Conflict`.
+- `app.services.status.SLOT_TRANSITIONS` (раздел 4), `Action.APPOINTMENT_VIEW` в `rbac`.
+- `app.web.dates`: `parse_page_time(text) -> datetime.time | None`, константа `TIME_FORMAT_ERROR = "Введите время в формате чч:мм"`.
+- **Дополнительные тексты `detail`:** `Slot has not ended` (no-show). Пакет слотов, 409: `detail` начинается с `Slots overlap` и содержит `start_at` первого проблемного слота в формате `2026-11-03T07:30:00Z`.
+- **ФИО** (`doctor_name`, `athlete_name`): `Фамилия Имя Отчество`, отчество опускается, если его нет.
+- `GET /schedule/appointments`: по умолчанию `end_at >= now`; отменённые прошлые видны только при `status=cancelled`. `GET /schedule/slots/all`: параметр `appointment` у слота без записи равен `null`.
+- Повторное открытие (`reopen`) занятого слота: 204 или 409, слот и запись не меняются.
+
+### 12.2 Страницы (общее)
+HTMX-запрос (`HX-Request: true`) получает фрагмент без `<html`; обычный запрос полную страницу. Ошибки: настоящие коды (404/409/422/403). Поля даты и времени `type="text"`, `placeholder="дд.мм.гггг"` / `"чч:мм"`, id поля `f-<name>`, ошибка поля `<small class="error" id="e-<name>">`. Кнопки действий строки: `<button data-action="...">`. Статус строки: атрибут `data-status` (`free|booked|closed` у слота; `booked|arrived|done|cancelled|no_show` у записи).
+
+### 12.3 `/cabinet/schedule` (admin, registrar, doctor, athlete)
+- Форма `<form id="slot-filters" hx-get="/cabinet/schedule" hx-target="#slots-results" hx-push-url="true">`; поля `doctor_id` (select, `f-doctor_id`), `specialty_id` (select), `date_from`, `date_to` (ДД.ММ.ГГГГ; ISO тоже принимается), `offset` (служебное).
+- Результат: `<div id="slots-results">` с `<table id="slots-table">`, строка `<tr id="slot-{id}">` (дата `ДД.ММ.ГГГГ`, время `ЧЧ:ММ` по Москве, врач, специальность, кабинет, кнопка "Записаться" у athlete/registrar/admin; у doctor кнопок нет). Пусто: текст "Свободных слотов нет". Размер страницы 50; при продолжении кнопка `<button id="load-more" hx-get="...offset=50...">Показать ещё</button>`; запрос `offset>0` с HX возвращает только строки `<tr id="slot-...">` (и без `load-more`, если больше нет).
+- Ошибки фильтра (422): под полем `e-date_from`/`e-date_to`; `date_from > date_to`: "Начальная дата позже конечной".
+- Для admin/registrar: поле поиска `<input id="athlete-search" name="q" hx-get="/cabinet/schedule/athletes">`, скрытое `<input type="hidden" id="athlete-id" name="athlete_id">`, место выбранного `id="selected-athlete"`. У athlete и doctor этих элементов нет.
+- `GET /cabinet/schedule/athletes?q=` (admin, registrar; остальные 403): фрагмент, элементы `<li data-athlete-id="{id}">ФИО, ДД.ММ.ГГГГ</li>`; поиск по началу фамилии без учёта регистра, только активные спортсмены, `q` после trim короче 2 символов или отсутствует: пустой результат, 200; максимум 10. Email и телефон не выводятся.
+- `POST /cabinet/schedule/book` (поля `slot_id`, для staff `athlete_id`). Успех 200: `<div id="booking-result" class="alert alert-success">Записано: 03.11.2026 в 10:30, врач Кузнецов Пётр Иванович, кабинет 305</div>` (часть про кабинет опускается, если его нет) и `<tr id="slot-{id}" hx-swap-oob="delete">`. Ошибка: тот же `div#booking-result` с `alert-error` и код; при 409 дополнительно `<div id="slots-results" hx-swap-oob="true">` с обновлённой таблицей.
+
+| Ситуация | Код | Текст |
+|---|---|---|
+| `Slot is already taken` | 409 | Слот уже занят, выберите другой |
+| `Slot is closed` | 409 | Слот закрыт для записи |
+| `Slot has already started` | 409 | Приём уже начался, запись невозможна |
+| `Slot is too far ahead` | 409 | Запись на эту дату пока недоступна |
+| `Doctor is not active` | 409 | Врач не принимает, выберите другого |
+| `Athlete has an overlapping appointment` | 409 | У спортсмена уже есть запись на это время |
+| `Too many active appointments` | 409 | Достигнут лимит активных записей |
+| нет `athlete_id` у staff | 422 | Выберите спортсмена |
+| слот не найден | 404 | Слот не найден |
+| athlete с чужим `athlete_id` | 403 | (без требований к тексту) |
+
+### 12.4 `/cabinet/appointments` (admin, registrar, athlete)
+- Athlete: заголовок содержит "Моя запись"; `<section id="upcoming-appointments">` (статусы booked/arrived и `end_at >= now`) и `<section id="appointment-history">` (остальное); строки `<tr id="appt-{id}" data-status="...">`; только свои.
+- Staff: форма `<form id="queue-filters" hx-get="/cabinet/appointments">` с полями `date` (`f-date`, по умолчанию сегодня по Москве, ДД.ММ.ГГГГ), `doctor_id` (`f-doctor_id`), `status` (`f-status`), `athlete_id` (скрытое) и поиском `athlete-search`; таблица `<table id="queue-table">`, строки `appt-{id}`. Ошибка даты: 422 и `e-date`.
+- Кнопки строки (`data-action`): `cancel` (booked; athlete пока `now < start_at`, registrar/admin пока `now < end_at`; в разметке `confirm(` Alpine), `arrive` (booked, только registrar), `no-show` (booked, `now >= end_at`, только registrar). Кнопки `arrive`/`no-show` содержат Alpine-состояние `busy`.
+- `POST /cabinet/appointments/{id}/cancel|arrive|no-show`: 200 и фрагмент строки `tr#appt-{id}` с новым `data-status`; повторная отмена снова 200. Ошибки (404/403/409): тело содержит `alert-error` и актуальную строку (кроме 404).
+
+| Ситуация | Код | Текст |
+|---|---|---|
+| запись не найдена / чужая у athlete | 404 | Запись не найдена |
+| `Invalid appointment status` | 409 | Действие недоступно для текущего статуса записи |
+| отмена, `Slot has already started` | 409 | Приём уже начался, отмена невозможна |
+| `Appointment is not due today` | 409 | Приход можно отметить только в день приёма |
+| `Slot has not ended` | 409 | Приём ещё не закончился |
+
+### 12.5 `/cabinet/slots` (doctor, admin)
+- Фильтр `<form id="slots-filter">`: `date` (`f-date`, по умолчанию сегодня), для admin `doctor_id` (`f-doctor_id`). Админ без `doctor_id` видит слоты всех врачей на дату, врач только свои. Таблица `<table id="slots-manage-table">`, строки `<tr id="slot-{id}" data-status="free|booked|closed">`, у занятых ФИО спортсмена; кнопки `close` (free), `reopen` (closed), у booked кнопок нет.
+- `POST /cabinet/slots/{id}/close|reopen`: 200 и строка `tr#slot-{id}`; ошибка `Slot is booked`: 409 "Слот занят, сначала отмените запись" и актуальная строка; чужой слот врача 404.
+- Форма `<form id="slot-form" hx-post="/cabinet/slots/new">`, поля: `slot_date`, `start_time`, `end_time`, `slot_minutes` (необязательное), `slot_doctor_id` (только admin; id `f-slot_doctor_id`). Успех 200: `<div id="slots-result">Создано слотов: N</div>` и обновлённая `slots-manage-table` на дату `slot_date`. Введённые значения возвращаются как набраны.
+
+| Ситуация | Код | Где | Текст |
+|---|---|---|---|
+| дата не разобрана | 422 | `e-slot_date` | Введите существующую дату в формате дд.мм.гггг |
+| время не разобрано | 422 | `e-start_time` / `e-end_time` | Введите время в формате чч:мм |
+| конец не позже начала | 422 | `e-end_time` | Окончание должно быть позже начала |
+| начало не в будущем | 422 | `e-start_time` | Время начала должно быть в будущем |
+| длина не число | 422 | `e-slot_minutes` | Введите длину слота в минутах (целое число) |
+| admin без врача | 422 | `e-slot_doctor_id` | Выберите врача |
+| `Slots overlap` | 409 | общее сообщение `alert-error` | Слот пересекается с уже существующим |
+| врач с чужим `slot_doctor_id` | 403 | | |
+
+### 12.6 Меню (`nav_links`)
+Тексты из раздела 5: athlete "Записаться на приём" и "Моя запись"; registrar "Расписание и запись" и "Очередь и приход"; admin "Расписание и запись", "Очередь и приход", "Управление слотами"; doctor "Свободные слоты" и "Мои слоты"; coach без ссылок расписания.
+
+### 12.7 Инфраструктура тестов
+`tests/conftest.py` создаёт `btree_gist` перед `create_all`; фикстуры этапа в `tests/schedule/fixtures.py` (`clock`, `settings_env`, `make_slot`, `make_booking`, `insert_booking`, `force_status`, `make_case`, `doctor2`, `athlete2`, `athlete3`); после каждого теста `assert_schedule_invariants` (отключается маркером `no_schedule_invariants` только там, где данные вставляются в обход приложения). `tests/test_migrations.py` (маркер `slow`) гоняет `alembic upgrade head`, `downgrade -1`, `upgrade head`, `check` в отдельной БД `medcenter_test_migrations`.

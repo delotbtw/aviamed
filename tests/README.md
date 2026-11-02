@@ -37,3 +37,14 @@ The database name must contain `test` (the schema is dropped and recreated at se
 - `users/` - blocks D, E, F, G (create user, register athlete, PATCH /users/me, deactivate)
 - `pages/` - block H (pages, cookies, session, CSRF, forms)
 - `test_cli.py` - block I (`python -m app.cli create-admin`, password via `ADMIN_PASSWORD` env)
+
+## Параллельные прогоны
+
+Тесты пересоздают схему в тестовой БД, поэтому два одновременных `pytest` в одной базе мешают друг другу (зависания, случайные ошибки). Если тесты запускают несколько человек или агентов сразу, у каждого должна быть своя база на том же сервере `postgres-test`:
+
+```bash
+docker compose --profile test exec postgres-test createdb -U medcenter medcenter_test_mine
+TEST_DATABASE_URL=postgresql+asyncpg://medcenter:medcenter@localhost:55432/medcenter_test_mine uv run pytest
+```
+
+Имя базы обязано содержать `test` (иначе тесты откажутся запускаться).

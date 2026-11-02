@@ -4,6 +4,7 @@ The fixed "now" is 2026-11-02 09:00 Europe/Moscow (Monday) = 06:00 UTC. Moscow h
 """
 
 import asyncio
+import re
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -168,8 +169,6 @@ async def assert_schedule_invariants(sql) -> None:
 
 
 # --------------------------------------------------------------------------- pages (HTML helpers)
-
-import re  # noqa: E402
 
 HX = {"HX-Request": "true"}
 ORIGIN_EVIL = {"Origin": "https://evil.example"}

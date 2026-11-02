@@ -4,6 +4,7 @@ import pytest
 
 from app.core.rbac import Role
 from tests.helpers import STRONG_PASSWORD, athlete_payload, location, set_cookie_headers
+from tests.pages.dom import by_id, parse
 
 ATHLETE_LINK = "Зарегистрировать спортсмена"
 USER_LINK = "Создать пользователя"
@@ -20,17 +21,23 @@ PASSWORD_LINK = "Сменить пароль"
         (Role.COACH, [PASSWORD_LINK], [ATHLETE_LINK, USER_LINK]),
     ],
 )
-async def test_H9_cabinet_shows_name_and_role_links(client, users_by_role, web_session, role, shown, hidden):
+async def test_H9_cabinet_shows_name_and_side_menu_links(client, users_by_role, web_session, role, shown, hidden):
     user = users_by_role[role]
     web_session(client, user)
 
     resp = await client.get("/cabinet")
 
     assert resp.status_code == 200
-    assert "Иванов" in resp.text and "Иван" in resp.text
+    root = parse(resp.text)
+    main = by_id(root, "main")
+    assert "Иванов" in main.text and "Иван" in main.text
+    menu = [
+        a.text for a in [a for a in main.find_all("a") if "tile" in a.attrs.get("class", "")]
+    ]  # home: tiles instead of a side menu
     for text in shown:
-        assert text in resp.text
+        assert any(item.startswith(text) for item in menu)
     for text in hidden:
+        assert not any(item.startswith(text) for item in menu)
         assert text not in resp.text
 
 
@@ -239,3 +246,28 @@ async def test_athlete_form_offers_active_coaches_in_a_select(client, registrar,
 
     assert '<select id="f-coach_id" name="coach_id"' in resp.text
     assert f'value="{coach.id}"' in resp.text and f'value="{inactive.id}"' not in resp.text
+
+
+async def test_home_has_no_side_menu_and_tiles_without_descriptions(client, registrar, web_session):
+    web_session(client, registrar)
+
+    resp = await client.get("/cabinet")
+
+    root = parse(resp.text)
+    assert by_id(root, "side-nav") is None and by_id(root, "menu-toggle") is None
+    tiles = root.by_class("tile")
+    assert tiles and all(t.tag == "a" for t in tiles)
+    assert "Аккаунт, личные данные" not in "".join(t.text for t in tiles)
+    assert "—" not in "".join(t.text for t in tiles)
+    assert root.by_class("wordmark")[0].attrs["href"] == "/cabinet"
+
+
+async def test_inner_page_has_compact_menu_with_current_item(client, registrar, web_session):
+    web_session(client, registrar)
+
+    resp = await client.get("/cabinet/athletes/new")
+
+    menu = by_id(parse(resp.text), "side-nav")
+    current = [a for a in menu.find_all("a") if a.attrs.get("aria-current") == "page"]
+    assert [a.text for a in current] == [ATHLETE_LINK]
+    assert all("—" not in a.text for a in menu.find_all("a"))

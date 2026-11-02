@@ -28,14 +28,15 @@ async def test_seed_creates_reference_data_and_one_user_per_role(db_engine, clea
     assert await count(sql, "sports") == len(SPORTS)
     assert await count(sql, "specialties") == len(SPECIALTIES)
     users = {u["email"]: u for u in await sql("SELECT * FROM users")}
-    assert set(users) == set(DEMO_EMAILS.values())
+    assert set(DEMO_EMAILS.values()) <= set(users)  # stage 2.1: more users than one per role
     assert all(u["is_active"] and u["password_hash"].startswith("$argon2") for u in users.values())
-    [doctor] = await sql("SELECT * FROM doctor_profiles")
+    [doctor] = await sql("SELECT * FROM doctor_profiles WHERE user_id = :i", i=users[DEMO_EMAILS[Role.DOCTOR]]["id"])
     [spec] = await sql("SELECT name FROM specialties WHERE id = :i", i=doctor["specialty_id"])
     assert spec["name"] == "Спортивная медицина" and doctor["can_issue_conclusion"] is True
-    [athlete] = await sql("SELECT * FROM athlete_profiles")
-    assert athlete["coach_id"] == users[DEMO_EMAILS[Role.COACH]]["id"]
-    assert await count(sql, "consents") == 1
+    athlete_id = users[DEMO_EMAILS[Role.ATHLETE]]["id"]
+    [athlete] = await sql("SELECT * FROM athlete_profiles WHERE user_id = :i", i=athlete_id)
+    assert athlete["coach_id"] in {u["id"] for u in users.values() if u["role"] == Role.COACH.value}
+    assert await count(sql, "consents") == 40
 
 
 async def test_seed_is_idempotent_and_demo_users_can_log_in(client, sql):
@@ -68,7 +69,7 @@ async def test_seed_demo_never_prints_a_custom_password(db_engine, clean_db):
     from pathlib import Path
 
     secret = "Custom-Secret-Passw0rd"
-    env = {**os.environ, "DATABASE_URL": TEST_DATABASE_URL, "DEMO_PASSWORD": secret}
+    env = {**os.environ, "DATABASE_URL": TEST_DATABASE_URL, "DEMO_PASSWORD": secret, "ALLOW_DEMO_SEED": "1"}
     result = await asyncio.to_thread(
         subprocess.run,
         [sys.executable, "-m", "app.cli", "seed-demo", "--force"],

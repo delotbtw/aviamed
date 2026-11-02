@@ -39,7 +39,7 @@ async def test_L2_only_free_future_slots_inside_the_horizon_of_active_doctors(
     await make_slot(doctor, at(12), status="closed")
     await make_slot(doctor, NOW, minutes=30)  # starts exactly now
     await make_slot(doctor, NOW - timedelta(hours=2))  # already past
-    await make_slot(doctor, NOW + timedelta(days=HORIZON_DAYS, minutes=1))  # one minute too far
+    await make_slot(doctor2, NOW + timedelta(days=HORIZON_DAYS, minutes=1))  # one minute too far (other doctor)
     await make_slot(inactive, at(10))  # doctor deactivated
 
     resp = await client.get(URL, headers=athlete.headers)
@@ -292,10 +292,15 @@ async def test_L9_doctor_sees_own_slots_of_any_status_with_the_athlete_name(
     assert athlete.email not in resp.text and "+79990000000" not in resp.text
 
 
-async def test_L9_doctor_asking_for_another_doctor_is_403(client, clock, doctor, doctor2):
+async def test_R7_doctor_asking_for_another_doctor_gets_only_own_slots(client, clock, doctor, doctor2, make_slot):
+    own = await make_slot(doctor, at(10))
+    foreign = await make_slot(doctor2, at(11))
+
     resp = await client.get(ALL_URL, params={"doctor_id": doctor2.id}, headers=doctor.headers)
 
-    assert resp.status_code == 403
+    assert resp.status_code == 200, resp.text
+    assert ids(resp) == [own] and foreign not in ids(resp)
+    assert "Кузнецов" not in resp.text  # nothing about the other doctor leaks
 
 
 async def test_L9_doctor_may_filter_by_own_id(client, clock, doctor, make_slot):
@@ -332,10 +337,28 @@ async def test_L10_invalid_status_filter_is_422(client, clock, admin):
     assert (await client.get(ALL_URL, params={"status": "bogus"}, headers=admin.headers)).status_code == 422
 
 
-@pytest.mark.parametrize("role", [Role.REGISTRAR, Role.ATHLETE, Role.COACH])
-async def test_L10_other_roles_are_forbidden(client, clock, users_by_role, role):
+@pytest.mark.parametrize("role", [Role.ATHLETE, Role.COACH])
+async def test_R8_athlete_and_coach_are_forbidden(client, clock, users_by_role, role):
     assert (await client.get(ALL_URL, headers=users_by_role[role].headers)).status_code == 403
 
 
 async def test_L10_without_token_is_401(client, clock):
     assert (await client.get(ALL_URL)).status_code == 401
+
+
+@pytest.mark.parametrize("role", [Role.ADMIN, Role.REGISTRAR])
+async def test_R8_admin_and_registrar_see_slots_of_all_doctors(
+    client, clock, users_by_role, doctor, doctor2, athlete, make_slot, make_booking, role
+):
+    a = await make_slot(doctor, at(10))
+    b = await make_slot(doctor2, at(11))
+    await make_booking(b, athlete)
+
+    resp = await client.get(ALL_URL, headers=users_by_role[role].headers)
+
+    assert resp.status_code == 200, resp.text
+    by_id = {i["id"]: i for i in resp.json()}
+    assert set(by_id) == {a, b}
+    assert by_id[b]["appointment"]["athlete_name"] == "Иванов Иван Иванович"
+    filtered = await client.get(ALL_URL, params={"doctor_id": doctor2.id}, headers=users_by_role[role].headers)
+    assert ids(filtered) == [b]

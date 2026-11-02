@@ -12,9 +12,11 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access_tokens import AccessTokenService, build_access_tokens
+from app.core.clock import Clock, get_clock
 from app.core.config import Settings, get_settings
 from app.core.db import get_session
 from app.core.exceptions import AuthenticationFailed, PermissionDenied
+from app.core.local_time import LocalCalendar
 from app.core.rbac import Action, Role, roles_for
 from app.core.redis import get_redis
 from app.core.uow import SqlAlchemyUnitOfWork, UnitOfWork
@@ -23,7 +25,15 @@ from app.repositories.user import UserRepository
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+ClockDep = Annotated[Clock, Depends(get_clock)]
 _bearer = HTTPBearer(auto_error=False)
+
+
+def get_calendar(settings: SettingsDep) -> LocalCalendar:
+    return LocalCalendar(settings.schedule_timezone)
+
+
+CalendarDep = Annotated[LocalCalendar, Depends(get_calendar)]
 
 
 def get_redis_client() -> Redis:

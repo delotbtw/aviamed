@@ -1,0 +1,7 @@
+{% from "schedule_macros.html" import appointments_table %}
+{% if rows %}
+  {{ appointments_table(rows, true, "Записи на день", table_id="queue-table") }}
+  {% if truncated %}<p class="hint">Показаны первые {{ limit }} записей, уточните фильтры.</p>{% endif %}
+{% elif not errors %}
+  <p class="empty">Записей по этим условиям нет.</p>
+{% endif %}

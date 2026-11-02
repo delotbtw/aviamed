@@ -52,3 +52,15 @@ class RateLimited(DomainError):
     def __init__(self, retry_after: int) -> None:
         super().__init__()
         self.retry_after = retry_after
+
+
+class LockTimeout(DomainError):
+    """A row lock was not obtained within `lock_timeout`: the client may repeat the request."""
+
+    default_message = "The resource is busy, try again"
+
+
+class ConcurrentUpdate(Conflict):
+    """An optimistic lock failed: the row was changed by another transaction since it was read."""
+
+    default_message = "The record was changed concurrently, repeat the request"

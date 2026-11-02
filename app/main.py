@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -34,8 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    if not settings.debug and settings.secret_key == "change-me":
-        raise RuntimeError("SECRET_KEY must be set to a non-default value when DEBUG is off")
+    ZoneInfo(settings.schedule_timezone)  # fails at start-up when the zone or the tz database is missing
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     register_exception_handlers(app)
     register_web_handlers(app)

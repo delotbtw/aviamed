@@ -11,6 +11,10 @@ class UserRepository(BaseRepository[User]):
     async def get_by_email(self, email: str) -> User | None:
         return await self.session.scalar(select(User).where(User.email == email))
 
+    async def is_active(self, user_id: int) -> bool:
+        """Fresh read of the flag (not the identity map)."""
+        return bool(await self.session.scalar(select(User.is_active).where(User.id == user_id)))
+
     async def list_active_coaches(self) -> list[User]:
         stmt = (
             select(User)

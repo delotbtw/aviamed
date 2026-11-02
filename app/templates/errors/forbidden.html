@@ -3,7 +3,8 @@
 {% block title %}Нет доступа, АвиаМед{% endblock %}
 {% block content %}
   <div class="workspace workspace--narrow">
-    {{ page_head("Нет доступа", "У роли «" ~ role_labels[user.role] ~ "» нет доступа к этой странице.") }}
+    {{ page_head("Нет доступа") }}
+    <p>У вас нет доступа к этой странице.</p>
     <a class="btn" href="/cabinet">Вернуться в кабинет</a>
   </div>
 {% endblock %}

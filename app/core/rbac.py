@@ -35,9 +35,11 @@ class Action(StrEnum):
     REFERENCE_READ = "reference_read"
     REFERENCE_WRITE = "reference_write"
     SLOT_CREATE = "slot_create"
+    SLOT_VIEW = "slot_view"
     SLOT_VIEW_FREE = "slot_view_free"
     APPOINTMENT_BOOK = "appointment_book"
     APPOINTMENT_CANCEL = "appointment_cancel"
+    APPOINTMENT_VIEW = "appointment_view"
     CASE_OPEN = "case_open"
     ARRIVAL_MARK = "arrival_mark"
     EXAM_RESULT_WRITE = "exam_result_write"
@@ -60,10 +62,12 @@ PERMISSIONS: dict[Action, dict[Role, Scope]] = {
     Action.PROFILE_EDIT: {Role.ADMIN: F, Role.REGISTRAR: F, Role.DOCTOR: F, Role.ATHLETE: OWN, Role.COACH: F},
     Action.REFERENCE_READ: {Role.ADMIN: F, Role.REGISTRAR: R, Role.DOCTOR: R, Role.ATHLETE: R, Role.COACH: R},
     Action.REFERENCE_WRITE: {Role.ADMIN: F},
-    Action.SLOT_CREATE: {Role.ADMIN: F, Role.DOCTOR: OWN},
+    Action.SLOT_CREATE: {Role.ADMIN: F, Role.REGISTRAR: F},
+    Action.SLOT_VIEW: {Role.ADMIN: F, Role.REGISTRAR: F, Role.DOCTOR: OWN},
     Action.SLOT_VIEW_FREE: {Role.ADMIN: F, Role.REGISTRAR: F, Role.DOCTOR: F, Role.ATHLETE: F},
     Action.APPOINTMENT_BOOK: {Role.ADMIN: F, Role.REGISTRAR: Scope.PROXY, Role.ATHLETE: OWN},
     Action.APPOINTMENT_CANCEL: {Role.ADMIN: F, Role.REGISTRAR: F, Role.ATHLETE: OWN},
+    Action.APPOINTMENT_VIEW: {Role.ADMIN: F, Role.REGISTRAR: F, Role.ATHLETE: OWN},
     Action.CASE_OPEN: {Role.ADMIN: F, Role.REGISTRAR: F},
     Action.ARRIVAL_MARK: {Role.REGISTRAR: F},
     Action.EXAM_RESULT_WRITE: {Role.DOCTOR: Scope.OWN_SPECIALTY},

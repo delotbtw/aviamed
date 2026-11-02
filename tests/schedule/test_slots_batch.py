@@ -10,8 +10,8 @@ from tests.schedule.support import NOW, at, gather, iso, parse_dt, post_batch
 URL = "/schedule/slots/batch"
 
 
-async def test_K1_window_is_cut_into_consecutive_slots(client, clock, doctor, sql, audit):
-    resp = await post_batch(client, doctor, at(9), at(12), 30)
+async def test_K1_window_is_cut_into_consecutive_slots(client, registrar, clock, doctor, sql, audit):
+    resp = await post_batch(client, registrar, at(9), at(12), 30, doctor=doctor)
 
     assert resp.status_code == 201, resp.text
     body = resp.json()
@@ -32,8 +32,8 @@ async def test_K1_admin_creates_a_batch_for_a_doctor(client, clock, admin, docto
     assert len(await sql("SELECT id FROM slots WHERE doctor_id = :d", d=doctor2.id)) == 3
 
 
-async def test_K2_window_not_divisible_by_slot_length_is_422(client, clock, doctor, sql):
-    resp = await post_batch(client, doctor, at(9), at(11, 50), 30)
+async def test_K2_window_not_divisible_by_slot_length_is_422(client, registrar, clock, doctor, sql):
+    resp = await post_batch(client, registrar, at(9), at(11, 50), 30, doctor=doctor)
 
     assert resp.status_code == 422
     assert await sql("SELECT id FROM slots") == []
@@ -52,16 +52,18 @@ async def test_K2_window_not_divisible_by_slot_length_is_422(client, clock, doct
     ],
     ids=["50-slots", "51-slots", "12h", "12h30", "13h", "slot-9min", "slot-241min"],
 )
-async def test_K3_batch_size_limits(client, clock, doctor, start, end, minutes, expected):
-    resp = await post_batch(client, doctor, start, end, minutes)
+async def test_K3_batch_size_limits(client, registrar, clock, doctor, start, end, minutes, expected):
+    resp = await post_batch(client, registrar, start, end, minutes, doctor=doctor)
 
     assert resp.status_code == expected, resp.text
 
 
-async def test_K4_one_conflicting_slot_rolls_back_the_whole_batch(client, clock, doctor, make_slot, sql, audit):
+async def test_K4_one_conflicting_slot_rolls_back_the_whole_batch(
+    client, registrar, clock, doctor, make_slot, sql, audit
+):
     existing = await make_slot(doctor, at(10, 30), minutes=30)
 
-    resp = await post_batch(client, doctor, at(9), at(12), 30)
+    resp = await post_batch(client, registrar, at(9), at(12), 30, doctor=doctor)
 
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"].startswith("Slots overlap")
@@ -70,42 +72,40 @@ async def test_K4_one_conflicting_slot_rolls_back_the_whole_batch(client, clock,
     assert await audit("slot_create") == []
 
 
-async def test_K4_overlap_with_a_closed_slot_also_rolls_back(client, clock, doctor, make_slot, sql):
+async def test_K4_overlap_with_a_closed_slot_also_rolls_back(client, registrar, clock, doctor, make_slot, sql):
     await make_slot(doctor, at(11), minutes=30, status="closed")
 
-    resp = await post_batch(client, doctor, at(9), at(12), 30)
+    resp = await post_batch(client, registrar, at(9), at(12), 30, doctor=doctor)
 
     assert resp.status_code == 409
     assert len(await sql("SELECT id FROM slots")) == 1
 
 
-async def test_K5_batch_in_the_past_is_422(client, clock, doctor, sql):
-    resp = await post_batch(client, doctor, NOW - timedelta(hours=3), NOW + timedelta(hours=3), 30)
+async def test_K5_batch_in_the_past_is_422(client, registrar, clock, doctor, sql):
+    resp = await post_batch(client, registrar, NOW - timedelta(hours=3), NOW + timedelta(hours=3), 30, doctor=doctor)
 
     assert resp.status_code == 422, resp.text
     assert await sql("SELECT id FROM slots") == []  # the future half of the window is not created either
 
 
-async def test_K5_batch_beyond_the_horizon_is_422(client, clock, doctor, sql):
-    resp = await post_batch(client, doctor, at(9, days=61), at(10, days=61), 30)
+async def test_K5_batch_beyond_the_horizon_is_422(client, registrar, clock, doctor, sql):
+    resp = await post_batch(client, registrar, at(9, days=61), at(10, days=61), 30, doctor=doctor)
 
     assert resp.status_code == 422
     assert await sql("SELECT id FROM slots") == []
 
 
-async def test_K5_naive_time_is_422(client, clock, doctor):
-    body = {"start_at": "2026-11-03T09:00:00", "end_at": "2026-11-03T10:00:00", "slot_minutes": 30}
+async def test_K5_naive_time_is_422(client, registrar, clock, doctor):
+    body = {
+        "doctor_id": doctor.id,
+        "start_at": "2026-11-03T09:00:00",
+        "end_at": "2026-11-03T10:00:00",
+        "slot_minutes": 30,
+    }
 
-    resp = await client.post(URL, json=body, headers=doctor.headers)
+    resp = await client.post(URL, json=body, headers=registrar.headers)
 
     assert resp.status_code == 422
-
-
-async def test_K5_doctor_cannot_create_a_batch_for_another_doctor(client, clock, doctor, doctor2, sql):
-    resp = await post_batch(client, doctor, at(9), at(10), 30, doctor=doctor2)
-
-    assert resp.status_code == 403
-    assert await sql("SELECT id FROM slots") == []
 
 
 async def test_K5_admin_without_doctor_id_is_422(client, clock, admin):
@@ -114,8 +114,26 @@ async def test_K5_admin_without_doctor_id_is_422(client, clock, admin):
     assert resp.status_code == 422
 
 
-@pytest.mark.parametrize("role", [Role.REGISTRAR, Role.ATHLETE, Role.COACH])
-async def test_K5_other_roles_are_forbidden(client, clock, users_by_role, doctor, sql, role):
+async def test_R2_registrar_without_doctor_id_is_422(client, clock, registrar, sql):
+    resp = await post_batch(client, registrar, at(9), at(10), 30)
+
+    assert resp.status_code == 422
+    assert await sql("SELECT id FROM slots") == []
+
+
+@pytest.mark.parametrize("named", ["self", "other", "nobody"])
+async def test_R5_doctor_cannot_create_a_batch(client, clock, doctor, doctor2, sql, audit, named):
+    target = {"self": doctor, "other": doctor2, "nobody": None}[named]
+
+    resp = await post_batch(client, doctor, at(9), at(10), 30, doctor=target)
+
+    assert resp.status_code == 403, resp.text
+    assert await sql("SELECT id FROM slots") == []
+    assert await audit("slot_create") == []
+
+
+@pytest.mark.parametrize("role", [Role.ATHLETE, Role.COACH])
+async def test_R6_other_roles_are_forbidden(client, clock, users_by_role, doctor, sql, role):
     resp = await post_batch(client, users_by_role[role], at(9), at(10), 30, doctor=doctor)
 
     assert resp.status_code == 403
@@ -128,17 +146,17 @@ async def test_K5_without_token_is_401(client, clock):
     assert (await client.post(URL, json=body)).status_code == 401
 
 
-async def test_K6_two_identical_parallel_batches_one_wins(client, clock, doctor, sql):
-    resps = await gather(*(post_batch(client, doctor, at(9), at(12), 30) for _ in range(2)))
+async def test_K6_two_identical_parallel_batches_one_wins(client, registrar, clock, doctor, sql):
+    resps = await gather(*(post_batch(client, registrar, at(9), at(12), 30, doctor=doctor) for _ in range(2)))
 
     assert sorted(r.status_code for r in resps) == [201, 409], [r.text for r in resps]
     assert len(await sql("SELECT id FROM slots")) == 6
 
 
-async def test_K6_overlapping_parallel_batches_one_succeeds_entirely(client, clock, doctor, sql):
+async def test_K6_overlapping_parallel_batches_one_succeeds_entirely(client, registrar, clock, doctor, sql):
     resps = await gather(
-        post_batch(client, doctor, at(9), at(12), 30),
-        post_batch(client, doctor, at(10, 30), at(13, 30), 30),
+        post_batch(client, registrar, at(9), at(12), 30, doctor=doctor),
+        post_batch(client, registrar, at(10, 30), at(13, 30), 30, doctor=doctor),
     )
 
     assert sorted(r.status_code for r in resps) == [201, 409], [r.text for r in resps]

@@ -1,15 +1,20 @@
+{% set home = true %}
 {% extends "base.html" %}
 {% from "macros.html" import page_head %}
 {% block title %}Кабинет, АвиаМед{% endblock %}
 {% block content %}
-  <div class="workspace">
-    {{ page_head("Здравствуйте, " ~ user.last_name ~ " " ~ user.first_name ~ ((" " ~ user.middle_name) if user.middle_name else ""), "Роль: " ~ role_labels[user.role]) }}
-    <div class="sheet sheet--flush">
-      <ul class="index">
-        {% for link in nav_links(user) %}
-          <li><a class="index__link" href="{{ link.href }}"><span class="index__title">{{ link.label }}</span><span class="index__note">{{ link.note }}</span></a></li>
-        {% endfor %}
-      </ul>
-    </div>
+  <div class="home">
+    {{ page_head("Здравствуйте, " ~ user.last_name ~ " " ~ user.first_name ~ ((" " ~ user.middle_name) if user.middle_name else "")) }}
+    <nav class="tiles" aria-label="Разделы">
+      {% for link in nav_links(user) %}
+        <a class="tile" href="{{ link.href }}" title="{{ link.note }}">{{ link.label }}</a>
+      {% endfor %}
+    </nav>
+    {% if user.role.value == "coach" %}
+      <section id="coach-home" class="sheet" aria-labelledby="coach-home-title">
+        <h2 class="sheet__title" id="coach-home-title">Статус допуска</h2>
+        <p class="empty">Раздел со статусом допуска подопечных появится позже</p>
+      </section>
+    {% endif %}
   </div>
 {% endblock %}

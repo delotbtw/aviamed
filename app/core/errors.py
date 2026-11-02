@@ -11,6 +11,7 @@ from app.core.exceptions import (
     Conflict,
     DomainError,
     InvalidInput,
+    LockTimeout,
     NotFound,
     PermissionDenied,
     RateLimited,
@@ -24,6 +25,7 @@ _STATUS_BY_ERROR: tuple[tuple[type[DomainError], int], ...] = (
     (InvalidInput, status.HTTP_422_UNPROCESSABLE_CONTENT),
     (BadRequest, status.HTTP_400_BAD_REQUEST),
     (RateLimited, status.HTTP_429_TOO_MANY_REQUESTS),
+    (LockTimeout, status.HTTP_503_SERVICE_UNAVAILABLE),
 )
 
 
@@ -38,6 +40,8 @@ async def _handle_domain_error(request: Request, exc: DomainError) -> JSONRespon
     headers = None
     if isinstance(exc, RateLimited):
         headers = {"Retry-After": str(exc.retry_after)}
+    elif isinstance(exc, LockTimeout):
+        headers = {"Retry-After": "1"}
     elif isinstance(exc, AuthenticationFailed):
         headers = {"WWW-Authenticate": "Bearer"}
     return JSONResponse({"detail": str(exc)}, status_code=http_status_for(exc), headers=headers)

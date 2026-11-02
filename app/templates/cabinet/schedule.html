@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "macros.html" import page_head %}
+{% from "schedule_macros.html" import athlete_picker %}
+{% block title %}Свободные слоты, АвиаМед{% endblock %}
+{% block content %}
+  <div class="workspace workspace--wide stack">
+    {{ page_head("Свободные слоты") }}
+    {% if staff %}
+      <section class="sheet" aria-label="Спортсмен для записи">
+        {{ athlete_picker() }}
+      </section>
+    {% endif %}
+    <section class="sheet" aria-label="Слоты приёма">
+      {% include "partials/slot_filters.html" %}
+      <div aria-live="polite"><div id="booking-result"></div></div>
+      <div id="slots-results" class="results">
+        {% include "partials/slot_results.html" %}
+      </div>
+    </section>
+  </div>
+{% endblock %}
